@@ -559,12 +559,18 @@ int main(int argc, char *argv[]) {
                     // number of data points to show
                     graphs[i].limit = 60;
                     // fill with all the potential colors
-                    for (auto it = color_map.begin(); it != color_map.end(); it++) {
-                        graphs[i].colors.emplace_back(it->second);
+                    if (graphs[i].colors.size() < color_map.size()) {
+                        for (auto it = color_map.begin(); it != color_map.end(); it++) {
+                            graphs[i].colors.emplace_back(it->second);
+                        }
                     }
                     // make sure we have enough graphs for all the colors
                     while (graphs[i].values.size() < graphs[i].colors.size()) {
                         graphs[i].values.emplace_back();
+                    }
+                    // reserve to the limit
+                    for (size_t s = 0; s < graphs[i].values.size(); s++) {
+                        graphs[i].values[s].reserve(graphs[i].limit * 2);
                     }
 
                     for (size_t s = 0; s < graphs[i].values.size(); s++) {
@@ -613,7 +619,7 @@ int main(int argc, char *argv[]) {
                                                ctx->style.chart.selected_color, graphs[i].limit, min_value,
                                                max_value)) {
 
-                        for (size_t s = 0; s < graphs[i].values.size(); s++) {
+                        for (size_t s = 0; s < graphs[i].values.size() && s < NK_CHART_MAX_SLOT; s++) {
                             // ctx->style.chart.color
                             if (s > 0)
                                 nk_chart_add_slot_colored(ctx, nk_chart_type::NK_CHART_LINES, graphs[i].colors[s],
