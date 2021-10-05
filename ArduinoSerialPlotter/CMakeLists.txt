@@ -9,7 +9,7 @@ find_package(glfw3 CONFIG REQUIRED)
 #target_link_libraries(main PRIVATE glfw)
 
 # Add source to this project's executable.
-add_executable (ArduinoSerialPlotter "ArduinoSerialPlotter.cpp" "ArduinoSerialPlotter.h" "SerialClass.h" "simdjson.h" "simdjson.cpp" "nuklear_glfw_gl4.h" "nuklear.h")
+add_executable (ArduinoSerialPlotter "ArduinoSerialPlotter.cpp" "ArduinoSerialPlotter.h" "SerialClass.h" "simdjson.h" "simdjson.cpp" "nuklear_glfw_gl4.h" "nuklear.h" "json_writer.h" "utf8_json.h")
 target_link_libraries(ArduinoSerialPlotter PRIVATE GLEW::GLEW glfw)
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 23)
