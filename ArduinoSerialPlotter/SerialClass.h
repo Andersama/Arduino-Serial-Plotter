@@ -18,9 +18,9 @@ private:
 	//Connection status
 	bool connected = false;
 	//Get various information about the connection
-	COMSTAT status;
+    COMSTAT status = {};
 	//Keep track of last error
-	DWORD errors;
+	DWORD errors = 0;
 
 public:
 	//Create a Serial Object in an unconnected state

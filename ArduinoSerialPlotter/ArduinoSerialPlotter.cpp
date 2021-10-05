@@ -37,6 +37,8 @@ using namespace simdjson;
 //#define MAX_ELEMENT_BUFFER 128 * 1024
 #define MAX_VERTEX_BUFFER 4096 * 1024
 #define MAX_ELEMENT_BUFFER 1024 * 1024
+//#define MAX_VERTEX_BUFFER 8096 * 1024
+//#define MAX_ELEMENT_BUFFER 2048 * 1024
 
 #ifdef min
 #undef min
@@ -402,6 +404,28 @@ template <typename C> std::string json_dump_simple_container(const C &container)
     return oss.str();
 }
 
+template <typename C> std::string json_dump_simple_container(const C &container, size_t n) {
+    std::ostringstream oss;
+    typename C::const_iterator it = container.begin();
+    size_t count = 0;
+    oss << "[";
+    if (count < n)
+        oss << json_dump(*it);
+    count++;
+
+    for (++it; it != container.end(); ++it) {
+        if (count < n)
+            oss << ", " << json_dump(*it);
+        else
+            break;
+
+        count++;
+    }
+    oss << "]";
+
+    return oss.str();
+}
+
 template <typename M> std::string json_dump_associative_container(const M &map) {
     std::ostringstream oss;
     typename M::const_iterator it = map.begin();
@@ -483,18 +507,14 @@ std::string graphs_to_string(std::vector<graph_t> &graphs) {
     auto out_it = std::back_inserter(out);
     std::format_to(out_it, "[{}", "\n");
     for (size_t i = 0; i < graphs.size(); i++) {
-
         std::format_to(out_it, "{}", i ? ",{" : "{");
         std::format_to(out_it, "\n\t't':\"{}\"", sanitize(graphs[i].title));
 
-        std::format_to(out_it, "\n\t'l':{},", json_dump(graphs[i].labels));
-        // format_array(out, graphs[i].labels);
+        std::format_to(out_it, "\n\t'l':{},", json_dump_simple_container(graphs[i].labels, graphs[i].limit));
 
-        std::format_to(out_it, "\n\t'c':{},", json_dump(graphs[i].colors));
-        // format_array(out, graphs[i].colors);
+        std::format_to(out_it, "\n\t'c':{},", json_dump_simple_container(graphs[i].colors), graphs[i].limit);
 
-        std::format_to(out_it, "\n\t'd':{}", json_dump_simple_container(graphs[i].values));
-        // format_array(out, graphs[i].values);
+        std::format_to(out_it, "\n\t'd':{}", json_dump_simple_container(graphs[i].values, graphs[i].limit));
         std::format_to(out_it, "{}", '}');
     }
     std::format_to(out_it, "\n]");
@@ -753,6 +773,138 @@ NK_INTERN nk_flags nk_chart_draw_ytick_value(struct nk_context *ctx, float value
     return nk_chart_draw_ytick_value(ctx, ctx->current, &ctx->current->layout->chart, 0.0f, value, alignment);
 }
 
+NK_INTERN nk_flags nk_chart_draw_line(struct nk_context *ctx, struct nk_rect chart_bounds, float min_value,
+                                      float max_value, float value, float line_length, float line_thickness,
+                                      nk_color color, nk_flags alignment) {
+    // nk_tooltip(ctx, "text");
+    float range = max_value - min_value;
+    // ctx->current->
+    if (alignment & NK_TEXT_ALIGN_LEFT) {
+        float y = (chart_bounds.y + chart_bounds.h) - ((value - min_value) / range) * chart_bounds.h;
+
+        nk_stroke_line(&ctx->current->buffer, chart_bounds.x, y, chart_bounds.x + line_length, y, line_thickness,
+                       color);
+    } else if (alignment & NK_TEXT_ALIGN_TOP) {
+        float x = (chart_bounds.x) + ((value - min_value) / range) * chart_bounds.w;
+
+        nk_stroke_line(&ctx->current->buffer, x, chart_bounds.y, x, chart_bounds.y + line_length, line_thickness,
+                       color);
+    } else if (alignment & NK_TEXT_ALIGN_BOTTOM) {
+        float x = (chart_bounds.x) + ((value - min_value) / range) * chart_bounds.w;
+        float bottom = chart_bounds.y + chart_bounds.h;
+
+        nk_stroke_line(&ctx->current->buffer, x, bottom, x, bottom - line_length, line_thickness, color);
+    } else {
+        float y = (chart_bounds.y + chart_bounds.h) - ((value - min_value) / range) * chart_bounds.h;
+        float right = chart_bounds.x + chart_bounds.w;
+        nk_stroke_line(&ctx->current->buffer, right, y, right - line_length, y, line_thickness, color);
+    }
+
+    return 0;
+}
+
+NK_INTERN nk_flags nk_chart_draw_value(struct nk_context *ctx, struct nk_rect chart_bounds, float min_value,
+                                      float max_value, float value, float line_length, float line_thickness,
+                                      nk_color color, nk_flags alignment, nk_flags text_alignment) {
+    float range = max_value - min_value;
+
+    char text_value[64];
+    auto chrs = std::to_chars(text_value, text_value + 64, value);
+    *chrs.ptr = 0;
+    size_t len = chrs.ptr - text_value;
+
+    struct nk_text text;
+    struct nk_vec2 item_padding;
+    item_padding = (&ctx->style)->text.padding;
+    // text settings
+    text.padding.x = item_padding.x;
+    text.padding.y = item_padding.y;
+    text.background = (&ctx->style)->window.background;
+    text.text = color;
+
+    if (alignment & NK_TEXT_ALIGN_LEFT) {
+        float y = (chart_bounds.y + chart_bounds.h) - ((value - min_value) / range) * chart_bounds.h;
+
+        struct nk_rect text_bounds = chart_bounds;
+        text_bounds.y = y - (text.padding.y + (ctx->style.font->height) / 2.0);
+        text_bounds.h = ctx->style.font->height;
+        text_bounds.x += line_length;
+        text_bounds.w -= 2 * line_length;
+        
+        nk_widget_text(&ctx->current->buffer, text_bounds, text_value, len, &text, text_alignment, ctx->style.font);
+        //nk_draw_text(&ctx->current->buffer, , , , ctx->style.font, color, color);
+    } else if (alignment & NK_TEXT_ALIGN_TOP) {
+        float x = (chart_bounds.x) + ((value - min_value) / range) * chart_bounds.w;
+        float text_w =
+            ctx->style.font->width(ctx->style.font->userdata, ctx->style.font->height, (const char *)text_value, len);
+
+        struct nk_rect text_bounds = chart_bounds;
+        text_bounds.y += line_length;
+        text_bounds.h -= 2 * line_length;
+        text_bounds.x = x - ((text_w + (2.0f * text.padding.x)) / 2.0f);
+        text_bounds.w = text_w + (2.0f * text.padding.x);
+
+        nk_widget_text(&ctx->current->buffer, text_bounds, text_value, len, &text, text_alignment, ctx->style.font);
+    } else if (alignment & NK_TEXT_ALIGN_BOTTOM) {
+        float x = (chart_bounds.x) + ((value - min_value) / range) * chart_bounds.w;
+
+        float text_w =
+            ctx->style.font->width(ctx->style.font->userdata, ctx->style.font->height, (const char *)text_value, len);
+
+        struct nk_rect text_bounds = chart_bounds;
+        text_bounds.y += line_length;
+        text_bounds.h -= 2 * line_length;
+        text_bounds.x = x - ((text_w + (2.0f * text.padding.x)) / 2.0f);
+        text_bounds.w = text_w + (2.0f * text.padding.x);
+
+        nk_widget_text(&ctx->current->buffer, text_bounds, text_value, len, &text, text_alignment, ctx->style.font);
+    } else {
+        float y = (chart_bounds.y + chart_bounds.h) - ((value - min_value) / range) * chart_bounds.h;
+
+        struct nk_rect text_bounds = chart_bounds;
+        text_bounds.y = y - (ctx->style.font->height) / 2.0;
+        text_bounds.h = ctx->style.font->height;
+        text_bounds.x += line_length;
+        text_bounds.w -= 2 * line_length;
+
+        nk_widget_text(&ctx->current->buffer, text_bounds, text_value, len, &text, text_alignment, ctx->style.font);
+    }
+
+    return 0;
+}
+/*
+NK_INTERN nk_flags nk_chart_draw_tick(struct nk_context *ctx, struct nk_rect chart_bounds, float min_value,
+                                      float max_value, float value, float line_length, float line_thickness,
+                                      nk_color color, nk_flags alignment) {
+    // nk_tooltip(ctx, "text");
+    float range = max_value - min_value;
+    if (alignment & NK_TEXT_ALIGN_LEFT) {
+        float y = (chart_bounds.y + chart_bounds.h) - ((value - min_value) / range) * chart_bounds.h;
+
+        nk_stroke_line(&ctx->current->buffer, chart_bounds.x, y, chart_bounds.x + line_length, y, line_thickness,
+                       color);
+    } else if (alignment & NK_TEXT_ALIGN_TOP) {
+        float x = (chart_bounds.x) + ((value - min_value) / range) * chart_bounds.w;
+
+        nk_stroke_line(&ctx->current->buffer, x, chart_bounds.y, x, chart_bounds.y + line_length, line_thickness,
+                       color);
+    } else if (alignment & NK_TEXT_ALIGN_BOTTOM) {
+        float x = (chart_bounds.x) + ((value - min_value) / range) * chart_bounds.w;
+        float bottom = chart_bounds.y + chart_bounds.h;
+
+        nk_stroke_line(&ctx->current->buffer, x, bottom, x, bottom - line_length, line_thickness, color);
+    } else {
+        float y = (chart_bounds.y + chart_bounds.h) - ((value - min_value) / range) * chart_bounds.h;
+        float right = chart_bounds.x + chart_bounds.w;
+        nk_stroke_line(&ctx->current->buffer, right, y, right - line_length, y, line_thickness, color);
+    }
+}
+*/
+NK_INTERN nk_flags nk_chart_draw_ytick_value(struct nk_context *ctx, struct nk_rect chart_bounds, float min_value,
+                                             float max_value, float value, nk_flags alignment) {
+    // nk_tooltip(ctx, "text");
+}
+
 NK_INTERN nk_flags nk_chart_title(struct nk_context *ctx, const char *title, size_t len, nk_flags alignment) {
     struct nk_rect bounds;
     const struct nk_style *style = &ctx->style;
@@ -985,6 +1137,8 @@ int main(int argc, char *argv[]) {
 
     uint32_t window_width = 1920;
     uint32_t window_height = 1080;
+    int xticks = 4;
+    int yticks = 4;
     /* GLFW */
     glfwSetErrorCallback(error_callback);
     if (!glfwInit()) {
@@ -1098,7 +1252,8 @@ int main(int argc, char *argv[]) {
             // ctx->delta_time_seconds = 2.0f;
             // window_bounds = nk_window_get_content_region(ctx);
 
-            nk_menubar_begin(ctx);
+            //nk_menubar_begin(ctx);
+            if (nk_tree_push_hashed(ctx, NK_TREE_TAB, "Options", nk_collapse_states::NK_MAXIMIZED, "_", 1, __LINE__))
             {
                 nk_layout_row_dynamic(ctx, 30, 3);
 
@@ -1129,8 +1284,16 @@ int main(int argc, char *argv[]) {
                             demo_mode = false;
                     }
                 }
+
+                nk_layout_row_dynamic(ctx, 30, 2);
+                nk_label(ctx, "Marks (x-axis):", NK_TEXT_LEFT);
+                nk_slider_int(ctx, 4, &xticks, 10, 1);
+                nk_label(ctx, "Marks (y-axis):", NK_TEXT_LEFT);
+                nk_slider_int(ctx, 4, &yticks, 10, 1);
+                //nk_label(ctx, "")
+                nk_tree_pop(ctx);
             }
-            nk_menubar_end(ctx);
+            //nk_menubar_end(ctx);
 
             /* COM GUI */
             bg.r = 0.10f, bg.g = 0.18f, bg.b = 0.24f, bg.a = 1.0f;
@@ -1378,6 +1541,7 @@ int main(int argc, char *argv[]) {
 
                         float x_range = max_ts - min_ts;
                         float y_range = max_value - min_value;
+
                         for (size_t s = 0; s < graphs[i].values.size() && s < graphs[i].slots; s++) {
                             float *line_data = data + point_idx;
                             //
@@ -1402,7 +1566,58 @@ int main(int argc, char *argv[]) {
                             // datamanipulation++, we don't need mess with the vector's size
                             nk_stroke_polyline(&ctx->current->buffer, line_data, graphs[i].values[s].size(), 1.0f,
                                                graphs[i].colors[s]);
+                            struct nk_vec2 item_padding;
+                            struct nk_text slot_text;
+                            item_padding = (&ctx->style)->text.padding;
+
+                            slot_text.padding.x = item_padding.x;
+                            slot_text.padding.y = item_padding.y;
+                            slot_text.background = (&ctx->style)->window.background;
+                            slot_text.text = graphs[i].colors[s];
+                            // chart.slots[slot].color;
+                            // slot title
+                            struct nk_rect slot_bounds;
+                            slot_bounds = graph_bounds;
+
+                            slot_bounds.y += (((&ctx->style)->font->height + 2.0f) * (s + 2));
+                            slot_bounds.h -= 2 * (((&ctx->style)->font->height + 2.0f) * (s + 2));
+
+                            slot_bounds.x += 2 * (graph_bounds.w / graphs[i].limit);
+                            slot_bounds.w -= 4 * (graph_bounds.w / graphs[i].limit);
+
+                            nk_widget_text(&ctx->current->buffer, slot_bounds, graphs[i].labels[s].c_str(),
+                                           graphs[i].labels[s].size(), &slot_text, NK_TEXT_ALIGN_RIGHT,
+                                           (&ctx->style)->font);
                         }
+                        // draw ticks along vertical axis
+                        //size_t yticks = 4;
+                        float yspacing = y_range / (float)(yticks + 1);
+                        float yoffset = yspacing / 2.0f;
+                        float xstep = graph_bounds.w / graphs[i].limit;
+                        for (size_t t = 0; t < yticks; t++) {
+                            nk_chart_draw_line(ctx, graph_bounds, min_value, max_value,
+                                               min_value + (yspacing * (t + 1)), 10.0f, 2.0f,
+                                               nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_LEFT);
+
+                            nk_chart_draw_value(ctx, graph_bounds, min_value, max_value,
+                                               min_value + (yspacing * (t + 1)), 10.0f, 2.0f,
+                                                nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_LEFT,
+                                                NK_TEXT_ALIGN_MIDDLE | NK_TEXT_ALIGN_LEFT);
+                        }
+
+                        // draw ticks along horizontal axis
+                        //size_t xticks = 4;
+                        float xspacing = x_range / (float)(xticks);
+                        float xoffset = xspacing / 2.0f;
+                        float ystep = graph_bounds.y / graphs[i].limit;
+                        for (size_t t = 0; t < xticks; t++) {
+                            nk_chart_draw_line(ctx, graph_bounds, min_ts, max_ts, min_ts + (xspacing * t) + xoffset,
+                                               10.0f, 2.0f, nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_BOTTOM);
+
+                            nk_chart_draw_value(ctx, graph_bounds, min_ts, max_ts, min_ts + (xspacing * t) + xoffset,
+                                               10.0f, 2.0f, nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_BOTTOM, NK_TEXT_ALIGN_BOTTOM | NK_TEXT_ALIGN_CENTERED);
+                        }
+
                         // handle some user interfacing
                         nk_flags ret;
                         size_t hover_point;
@@ -1455,34 +1670,12 @@ int main(int argc, char *argv[]) {
                             if (nk_input_is_mouse_hovering_rect(&ctx->input, graph_bounds) &&
                                 (&ctx->input)->keyboard.keys[NK_KEY_COPY].down &&
                                 (&ctx->input)->keyboard.keys[NK_KEY_COPY].clicked) {
-                                //cout_buffer = graphs_to_string(graphs);
-                                // format_out("{}", );
-                                //nk_glfw3_clipboard_copy(, , );
-                                //glfwSetClipboardString(glfw.win, cout_buffer.c_str());
-                                //cout_buffer.clear();
                                 /*
-                                char text[8] = "Copy";
-                                const struct nk_style *style = &ctx->style;
-                                struct nk_vec2 padding = style->window.padding;
-
-                                float text_width =
-                                    style->font->width(style->font->userdata, style->font->height, text, 4);
-                                text_width += (4 * padding.x);
-
-                                float text_height = (style->font->height + 2 * padding.y);
-
-                                if (nk_tooltip_begin(ctx, (float)text_width)) {
-                                    nk_layout_row_dynamic(ctx, (float)text_height, 1);
-                                    nk_text(ctx, text, 4, NK_TEXT_LEFT);
-                                    nk_tooltip_end(ctx);
-                                }
+                                cout_buffer = graphs_to_string(graphs);
+                                std::cout << cout_buffer;
+                                glfwSetClipboardString(glfw.win, cout_buffer.c_str());
+                                cout_buffer.clear();
                                 */
-                                /*
-                                ret |= ((&ctx->input)->mouse.buttons[NK_BUTTON_LEFT].down &&
-                                        (&ctx->input)->mouse.buttons[NK_BUTTON_LEFT].clicked)
-                                           ? NK_CHART_CLICKED
-                                           : 0;
-                                           */
                             }
                         }
                     }
