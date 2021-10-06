@@ -1140,6 +1140,21 @@ size_t handle_json(struct nk_context *ctx, std::vector<graph_t> &graphs, const c
     }
 }
 
+struct polyline_data {
+    struct nk_vec2 *points;
+    struct nk_vec2 *points_end;
+    nk_color color;
+    float thickness;
+};
+/*
+void render_polyline(void *canvas, short x, short y, unsigned short w, unsigned short h, nk_handle callback_data) {
+    struct nk_draw_list *list = (struct nk_draw_list *)canvas;
+    polyline_data *data = (polyline_data *)callback_data.ptr;
+    nk_draw_list_stroke_poly_line(list, data->points, (data->points_end - data->points), data->color, NK_STROKE_OPEN, data->thickness,
+                                  list->config.line_AA);
+    nk_draw_list_path_clear(list);
+}
+*/
 // application reads from the specified serial port and reports the collected
 // data
 int main(int argc, char *argv[]) {
@@ -1319,12 +1334,12 @@ int main(int argc, char *argv[]) {
                 nk_slider_int(ctx, 4, &xticks, 10, 1);
                 nk_label(ctx, "Marks (y-axis):", NK_TEXT_LEFT);
                 nk_slider_int(ctx, 4, &yticks, 10, 1);
-                //nk_label(ctx, "Zoom: ", NK_TEXT_LEFT);
-                //nk_slider_float(ctx, 0.0f, &zoom_factor, 1.5f, 0.001f);
+                // nk_label(ctx, "Zoom: ", NK_TEXT_LEFT);
+                // nk_slider_float(ctx, 0.0f, &zoom_factor, 1.5f, 0.001f);
                 nk_property_float(ctx, "Zoom", 0.0, &zoom_factor, 1.5f, 0.01f, 0.01f);
                 nk_property_float(ctx, "Rate", 0.0, &zoom_rate, 1.0, 0.0001f, 0.0001f);
-                //nk_label(ctx, "Zoom Rate: ", NK_TEXT_LEFT);
-                //nk_slider_float(ctx, 0.0f, &zoom_rate, 1.0f, 0.001f);
+                // nk_label(ctx, "Zoom Rate: ", NK_TEXT_LEFT);
+                // nk_slider_float(ctx, 0.0f, &zoom_rate, 1.0f, 0.001f);
                 // nk_label(ctx, "")
                 nk_tree_pop(ctx);
             }
@@ -1524,8 +1539,7 @@ int main(int argc, char *argv[]) {
 
                         nk_chart_end(ctx);
                     }
-#endif
-#if 1
+#else
                     {
                         struct nk_window *win;
                         struct nk_chart *chart;
@@ -1589,7 +1603,7 @@ int main(int argc, char *argv[]) {
 
                         float x_range = max_ts - min_ts;
                         float y_range = yupper - ylower;
-                        //float y_range = max_value - min_value;
+                        // float y_range = max_value - min_value;
 
                         float ylimrange = yupper - ylower;
                         float yspacing = ylimrange / (float)(yticks + 1);
@@ -1618,8 +1632,17 @@ int main(int argc, char *argv[]) {
                             }
                             */
                             // datamanipulation++, we don't need mess with the vector's size
+                            /*
                             nk_stroke_polyline(&ctx->current->buffer, line_data, graphs[i].values[s].size(), 1.0f,
                                                graphs[i].colors[s]);
+                            */                 
+                                               
+                            nk_stroke_polyline_float(&ctx->current->buffer, line_data, graphs[i].values[s].size(), 1.0f,
+                                               graphs[i].colors[s]);
+                                               
+                            //struct nk_handle h;
+                            //h.ptr = &graphs[i].lin
+                            //nk_push_custom(&ctx->current->buffer, graph_bounds, render_polyline, );
                             struct nk_vec2 item_padding;
                             struct nk_text slot_text;
                             item_padding = (&ctx->style)->text.padding;
@@ -1648,12 +1671,10 @@ int main(int argc, char *argv[]) {
 
                         for (size_t t = 0; t < yticks; t++) {
                             nk_chart_draw_line(ctx, graph_bounds, ylower, yupper, ylower + (yspacing * (t + 1)), 10.0f,
-                                               2.0f,
-                                               nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_LEFT);
+                                               2.0f, nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_LEFT);
 
                             nk_chart_draw_value(ctx, graph_bounds, ylower, yupper, ylower + (yspacing * (t + 1)), 10.0f,
-                                                2.0f,
-                                                nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_LEFT,
+                                                2.0f, nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_LEFT,
                                                 NK_TEXT_ALIGN_MIDDLE | NK_TEXT_ALIGN_LEFT);
                         }
 
@@ -1680,7 +1701,7 @@ int main(int argc, char *argv[]) {
                         text_opts.padding.y = item_padding.y;
                         text_opts.background = (&ctx->style)->window.background;
                         text_opts.text = nk_color{255, 255, 255, 255}; // ctx->style.text.color;
-                        
+
                         nk_widget_text(&ctx->current->buffer, graph_bounds, graphs[i].title.data(),
                                        graphs[i].title.size(), &text_opts, NK_TEXT_ALIGN_CENTERED | NK_TEXT_ALIGN_TOP,
                                        ctx->style.font);
@@ -1736,16 +1757,16 @@ int main(int argc, char *argv[]) {
                             */
                             if (nk_input_is_mouse_hovering_rect(&ctx->input, graph_bounds) &&
                                 (&ctx->input)->mouse.buttons[NK_BUTTON_LEFT].down) {
-                                
+
                                 char text[64];
-                                float xval = std::lerp(min_ts, max_ts, (((&ctx->input)->mouse.pos.x - graph_bounds.x) / graph_bounds.w));
+                                float xval = std::lerp(
+                                    min_ts, max_ts, (((&ctx->input)->mouse.pos.x - graph_bounds.x) / graph_bounds.w));
                                 auto xchrs = std::to_chars(text, text + 64, xval);
                                 *xchrs.ptr = ',';
 
                                 float yval = std::lerp(
                                     yupper, ylower, (((&ctx->input)->mouse.pos.y - graph_bounds.y) / graph_bounds.h));
-                                auto chrs = std::to_chars(
-                                    xchrs.ptr + 1, text + 64,yval);
+                                auto chrs = std::to_chars(xchrs.ptr + 1, text + 64, yval);
                                 size_t text_len = chrs.ptr - text;
 
                                 const struct nk_style *style = &ctx->style;
@@ -1762,7 +1783,6 @@ int main(int argc, char *argv[]) {
                                     nk_text(ctx, text, text_len, NK_TEXT_LEFT);
                                     nk_tooltip_end(ctx);
                                 }
-
                             }
                             if (nk_input_is_mouse_hovering_rect(&ctx->input, graph_bounds) &&
                                 (&ctx->input)->keyboard.keys[NK_KEY_COPY].down &&

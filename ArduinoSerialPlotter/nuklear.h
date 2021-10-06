@@ -1,3 +1,4 @@
+// clang-format off
 /*
 /// # Nuklear
 /// ![](https://cloud.githubusercontent.com/assets/8057201/11761525/ae06f0ca-a0c6-11e5-819d-5610b25f6ef4.gif)
@@ -4389,7 +4390,8 @@ extern "C" {
         NK_COMMAND_POLYLINE,
         NK_COMMAND_TEXT,
         NK_COMMAND_IMAGE,
-        NK_COMMAND_CUSTOM
+        NK_COMMAND_CUSTOM,
+        NK_COMMAND_POLYLINE_FLOAT
     };
 
     /* command base and header of every command inside the buffer */
@@ -4521,6 +4523,14 @@ extern "C" {
         unsigned short line_thickness;
         unsigned short point_count;
         struct nk_vec2i points[1];
+    };
+
+    struct nk_command_polyline_float {
+        struct nk_command header;
+        struct nk_color color;
+        unsigned short line_thickness;
+        unsigned short point_count;
+        struct nk_vec2 *points; //struct nk_vec2 points[1];
     };
 
     struct nk_command_image {
@@ -9146,6 +9156,25 @@ nk_stroke_polyline(struct nk_command_buffer* b, float* points, int point_count,
     }
 }
 NK_API void
+nk_stroke_polyline_float(struct nk_command_buffer* b, float* points, int point_count,
+    float line_thickness, struct nk_color col)
+{
+    int i;
+    nk_size size = 0;
+    struct nk_command_polyline_float *cmd;
+
+    NK_ASSERT(b);
+    if (!b || col.a == 0 || line_thickness <= 0) return;
+    size = sizeof(*cmd);
+    //+ sizeof(float) * 2 * (nk_size)point_count;
+    cmd = (struct nk_command_polyline_float*)nk_command_buffer_push(b, NK_COMMAND_POLYLINE_FLOAT, size);
+    if (!cmd) return;
+    cmd->color = col;
+    cmd->point_count = (unsigned short)point_count;
+    cmd->line_thickness = (unsigned short)line_thickness;
+    cmd->points = (struct nk_vec2*)points;
+}
+NK_API void
 nk_draw_image(struct nk_command_buffer* b, struct nk_rect r,
     const struct nk_image* img, struct nk_color col)
 {
@@ -10555,6 +10584,11 @@ nk_convert(struct nk_context* ctx, struct nk_buffer* cmds,
         case NK_COMMAND_CUSTOM: {
             const struct nk_command_custom* c = (const struct nk_command_custom*)cmd;
             c->callback(&ctx->draw_list, c->x, c->y, c->w, c->h, c->callback_data);
+        } break;
+        case NK_COMMAND_POLYLINE_FLOAT: { //NK_COMMAND_CUSTOM + 1
+            const struct nk_command_polyline_float* p = (const struct nk_command_polyline_float*)cmd;
+            nk_draw_list_stroke_poly_line(&ctx->draw_list,
+                p->points, p->point_count, p->color, NK_STROKE_OPEN, p->line_thickness, (&ctx->draw_list)->config.line_AA);
         } break;
         default: break;
         }
