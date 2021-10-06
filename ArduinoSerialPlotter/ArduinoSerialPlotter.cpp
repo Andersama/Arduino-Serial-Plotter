@@ -1258,6 +1258,9 @@ int main(int argc, char *argv[]) {
     uint32_t baud_rate = 115200;
 
     size_t graphs_to_display = 0;
+
+    float zoom_factor = 0.20;
+    float zoom_rate = 0.003f;
     /* Main Loop */
     struct nk_rect window_bounds = nk_rect(0, 0, width, height);
     while (!glfwWindowShouldClose(win)) {
@@ -1316,6 +1319,12 @@ int main(int argc, char *argv[]) {
                 nk_slider_int(ctx, 4, &xticks, 10, 1);
                 nk_label(ctx, "Marks (y-axis):", NK_TEXT_LEFT);
                 nk_slider_int(ctx, 4, &yticks, 10, 1);
+                //nk_label(ctx, "Zoom: ", NK_TEXT_LEFT);
+                //nk_slider_float(ctx, 0.0f, &zoom_factor, 1.5f, 0.001f);
+                nk_property_float(ctx, "Zoom", 0.0, &zoom_factor, 1.5f, 0.01f, 0.01f);
+                nk_property_float(ctx, "Rate", 0.0, &zoom_rate, 1.0, 0.0001f, 0.0001f);
+                //nk_label(ctx, "Zoom Rate: ", NK_TEXT_LEFT);
+                //nk_slider_float(ctx, 0.0f, &zoom_rate, 1.0f, 0.001f);
                 // nk_label(ctx, "")
                 nk_tree_pop(ctx);
             }
@@ -1439,10 +1448,14 @@ int main(int argc, char *argv[]) {
                         }
                     }
                     // widen the view if somehow the data's perfectly flat
-                    if (min_value == max_value)
+                    if (min_value == max_value) {
                         max_value = min_value + 1.0f;
-                    if (min_ts == max_ts)
+                        graphs[i].upper_value.value = max_value;
+                        graphs[i].lower_value.value = min_value;
+                    }
+                    if (min_ts == max_ts) {
                         max_ts = min_ts + 1.0f;
+                    }
 
                     char hi_buffer[64];
                     auto num = std::to_chars(hi_buffer, hi_buffer + 64, max_value);
@@ -1568,15 +1581,20 @@ int main(int argc, char *argv[]) {
                         float xrange = max_ts - min_ts;
                         float yrange = max_value - min_value;
                         // make this an option
-                        graphs[i].upper_value.lerp_v = 0.005;
-                        graphs[i].lower_value.lerp_v = 0.005;
+                        graphs[i].upper_value.lerp_v = zoom_rate;
+                        graphs[i].lower_value.lerp_v = zoom_rate;
                         // make 0.05 an option
-                        float yupper = graphs[i].upper_value.get_next_smooth_upper(max_value + (0.05 * yrange));
-                        float ylower = graphs[i].lower_value.get_next_smooth_lower(min_value + (0.05 * yrange));
+                        float yupper = graphs[i].upper_value.get_next_smooth_upper(max_value + (zoom_factor * yrange));
+                        float ylower = graphs[i].lower_value.get_next_smooth_lower(min_value - (zoom_factor * yrange));
 
                         float x_range = max_ts - min_ts;
                         float y_range = yupper - ylower;
                         //float y_range = max_value - min_value;
+
+                        float ylimrange = yupper - ylower;
+                        float yspacing = ylimrange / (float)(yticks + 1);
+                        float yoffset = yspacing / 2.0f;
+                        float xstep = graph_bounds.w / graphs[i].limit;
 
                         for (size_t s = 0; s < graphs[i].values.size() && s < graphs[i].slots; s++) {
                             float *line_data = data + point_idx;
@@ -1588,7 +1606,7 @@ int main(int argc, char *argv[]) {
                                                                           x_range)); // std::lerp(0.0f, x_range, );
                                 line_data[(idx * 2) + 1] =
                                     (widget_bounds.y + widget_bounds.h) -
-                                    (((graphs[i].values[s][idx].y - min_value) / y_range) * widget_bounds.h);
+                                    (((graphs[i].values[s][idx].y - ylower) / ylimrange) * widget_bounds.h);
 
                                 point_idx += 2;
                             }
@@ -1627,10 +1645,7 @@ int main(int argc, char *argv[]) {
                         }
                         // draw ticks along vertical axis
                         // size_t yticks = 4;
-                        float ylimrange = yupper - ylower;
-                        float yspacing = ylimrange / (float)(yticks + 1);
-                        float yoffset = yspacing / 2.0f;
-                        float xstep = graph_bounds.w / graphs[i].limit;
+
                         for (size_t t = 0; t < yticks; t++) {
                             nk_chart_draw_line(ctx, graph_bounds, ylower, yupper, ylower + (yspacing * (t + 1)), 10.0f,
                                                2.0f,
@@ -1655,6 +1670,20 @@ int main(int argc, char *argv[]) {
                                                 10.0f, 2.0f, nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_BOTTOM,
                                                 NK_TEXT_ALIGN_BOTTOM | NK_TEXT_ALIGN_CENTERED);
                         }
+
+                        // Draw the title top centered
+                        struct nk_text text_opts;
+                        struct nk_vec2 item_padding;
+                        item_padding = (&ctx->style)->text.padding;
+                        // text settings
+                        text_opts.padding.x = item_padding.x;
+                        text_opts.padding.y = item_padding.y;
+                        text_opts.background = (&ctx->style)->window.background;
+                        text_opts.text = nk_color{255, 255, 255, 255}; // ctx->style.text.color;
+                        
+                        nk_widget_text(&ctx->current->buffer, graph_bounds, graphs[i].title.data(),
+                                       graphs[i].title.size(), &text_opts, NK_TEXT_ALIGN_CENTERED | NK_TEXT_ALIGN_TOP,
+                                       ctx->style.font);
 
                         // handle some user interfacing
                         nk_flags ret;
