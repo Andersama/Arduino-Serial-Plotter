@@ -82,6 +82,29 @@ nk_color get_color(std::string_view v) {
     }
 }
 
+template <typename T> struct smooth_data {
+    T value;
+    T lerp_v;
+    T get_delta(T v) { return v - value; }
+    T get_next_smooth(T v) {
+        // smooth logarithmic curve
+        value = std::lerp(value, v, lerp_v);
+        return value;
+    }
+    T get_next_smooth_lower(T v) {
+        if (v < value)
+            return value = v;
+        else
+            return value = std::lerp(value, v, lerp_v);
+    }
+    T get_next_smooth_upper(T v) {
+        if (v > value)
+            return value = v;
+        else
+            return value = std::lerp(value, v, lerp_v);
+    }
+};
+
 std::string example_json = R"raw({"t": 5649,
   "ng": 5,
   "lu": 4086,
@@ -232,6 +255,10 @@ struct graph_t {
     // std::vector<std::vector<float>> points;
     std::vector<std::string> labels;
     std::vector<nk_color> colors;
+
+    smooth_data<float> upper_value;
+    smooth_data<float> lower_value;
+
     size_t limit = 60;
     size_t slots = 0;
     std::string title;
@@ -804,8 +831,8 @@ NK_INTERN nk_flags nk_chart_draw_line(struct nk_context *ctx, struct nk_rect cha
 }
 
 NK_INTERN nk_flags nk_chart_draw_value(struct nk_context *ctx, struct nk_rect chart_bounds, float min_value,
-                                      float max_value, float value, float line_length, float line_thickness,
-                                      nk_color color, nk_flags alignment, nk_flags text_alignment) {
+                                       float max_value, float value, float line_length, float line_thickness,
+                                       nk_color color, nk_flags alignment, nk_flags text_alignment) {
     float range = max_value - min_value;
 
     char text_value[64];
@@ -830,9 +857,9 @@ NK_INTERN nk_flags nk_chart_draw_value(struct nk_context *ctx, struct nk_rect ch
         text_bounds.h = ctx->style.font->height;
         text_bounds.x += line_length;
         text_bounds.w -= 2 * line_length;
-        
+
         nk_widget_text(&ctx->current->buffer, text_bounds, text_value, len, &text, text_alignment, ctx->style.font);
-        //nk_draw_text(&ctx->current->buffer, , , , ctx->style.font, color, color);
+        // nk_draw_text(&ctx->current->buffer, , , , ctx->style.font, color, color);
     } else if (alignment & NK_TEXT_ALIGN_TOP) {
         float x = (chart_bounds.x) + ((value - min_value) / range) * chart_bounds.w;
         float text_w =
@@ -1252,9 +1279,8 @@ int main(int argc, char *argv[]) {
             // ctx->delta_time_seconds = 2.0f;
             // window_bounds = nk_window_get_content_region(ctx);
 
-            //nk_menubar_begin(ctx);
-            if (nk_tree_push_hashed(ctx, NK_TREE_TAB, "Options", nk_collapse_states::NK_MAXIMIZED, "_", 1, __LINE__))
-            {
+            // nk_menubar_begin(ctx);
+            if (nk_tree_push_hashed(ctx, NK_TREE_TAB, "Options", nk_collapse_states::NK_MAXIMIZED, "_", 1, __LINE__)) {
                 nk_layout_row_dynamic(ctx, 30, 3);
 
                 nk_label(ctx, "COM Port:", NK_TEXT_LEFT);
@@ -1290,10 +1316,10 @@ int main(int argc, char *argv[]) {
                 nk_slider_int(ctx, 4, &xticks, 10, 1);
                 nk_label(ctx, "Marks (y-axis):", NK_TEXT_LEFT);
                 nk_slider_int(ctx, 4, &yticks, 10, 1);
-                //nk_label(ctx, "")
+                // nk_label(ctx, "")
                 nk_tree_pop(ctx);
             }
-            //nk_menubar_end(ctx);
+            // nk_menubar_end(ctx);
 
             /* COM GUI */
             bg.r = 0.10f, bg.g = 0.18f, bg.b = 0.24f, bg.a = 1.0f;
@@ -1539,8 +1565,18 @@ int main(int argc, char *argv[]) {
                         // graphs[i].points.reserve(graphs[i].limit * graphs[i].values.size());
                         float *data = graphs[i].points.data();
 
+                        float xrange = max_ts - min_ts;
+                        float yrange = max_value - min_value;
+                        // make this an option
+                        graphs[i].upper_value.lerp_v = 0.005;
+                        graphs[i].lower_value.lerp_v = 0.005;
+                        // make 0.05 an option
+                        float yupper = graphs[i].upper_value.get_next_smooth_upper(max_value + (0.05 * yrange));
+                        float ylower = graphs[i].lower_value.get_next_smooth_lower(min_value + (0.05 * yrange));
+
                         float x_range = max_ts - min_ts;
-                        float y_range = max_value - min_value;
+                        float y_range = yupper - ylower;
+                        //float y_range = max_value - min_value;
 
                         for (size_t s = 0; s < graphs[i].values.size() && s < graphs[i].slots; s++) {
                             float *line_data = data + point_idx;
@@ -1590,23 +1626,24 @@ int main(int argc, char *argv[]) {
                                            (&ctx->style)->font);
                         }
                         // draw ticks along vertical axis
-                        //size_t yticks = 4;
-                        float yspacing = y_range / (float)(yticks + 1);
+                        // size_t yticks = 4;
+                        float ylimrange = yupper - ylower;
+                        float yspacing = ylimrange / (float)(yticks + 1);
                         float yoffset = yspacing / 2.0f;
                         float xstep = graph_bounds.w / graphs[i].limit;
                         for (size_t t = 0; t < yticks; t++) {
-                            nk_chart_draw_line(ctx, graph_bounds, min_value, max_value,
-                                               min_value + (yspacing * (t + 1)), 10.0f, 2.0f,
+                            nk_chart_draw_line(ctx, graph_bounds, ylower, yupper, ylower + (yspacing * (t + 1)), 10.0f,
+                                               2.0f,
                                                nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_LEFT);
 
-                            nk_chart_draw_value(ctx, graph_bounds, min_value, max_value,
-                                               min_value + (yspacing * (t + 1)), 10.0f, 2.0f,
+                            nk_chart_draw_value(ctx, graph_bounds, ylower, yupper, ylower + (yspacing * (t + 1)), 10.0f,
+                                                2.0f,
                                                 nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_LEFT,
                                                 NK_TEXT_ALIGN_MIDDLE | NK_TEXT_ALIGN_LEFT);
                         }
 
                         // draw ticks along horizontal axis
-                        //size_t xticks = 4;
+                        // size_t xticks = 4;
                         float xspacing = x_range / (float)(xticks);
                         float xoffset = xspacing / 2.0f;
                         float ystep = graph_bounds.y / graphs[i].limit;
@@ -1615,7 +1652,8 @@ int main(int argc, char *argv[]) {
                                                10.0f, 2.0f, nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_BOTTOM);
 
                             nk_chart_draw_value(ctx, graph_bounds, min_ts, max_ts, min_ts + (xspacing * t) + xoffset,
-                                               10.0f, 2.0f, nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_BOTTOM, NK_TEXT_ALIGN_BOTTOM | NK_TEXT_ALIGN_CENTERED);
+                                                10.0f, 2.0f, nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_BOTTOM,
+                                                NK_TEXT_ALIGN_BOTTOM | NK_TEXT_ALIGN_CENTERED);
                         }
 
                         // handle some user interfacing
@@ -1623,7 +1661,7 @@ int main(int argc, char *argv[]) {
                         size_t hover_point;
                         if (!(ctx->current->layout->flags & NK_WINDOW_ROM)) {
                             // check if we're in bounds of a point
-
+                            /*
                             for (size_t p = 0; p < point_idx; p += 2) {
                                 struct nk_rect point_of_interest;
                                 point_of_interest.x = data[p] - 2;
@@ -1666,7 +1704,37 @@ int main(int argc, char *argv[]) {
                                     }
                                 }
                             }
+                            */
+                            if (nk_input_is_mouse_hovering_rect(&ctx->input, graph_bounds) &&
+                                (&ctx->input)->mouse.buttons[NK_BUTTON_LEFT].down) {
+                                
+                                char text[64];
+                                float xval = std::lerp(min_ts, max_ts, (((&ctx->input)->mouse.pos.x - graph_bounds.x) / graph_bounds.w));
+                                auto xchrs = std::to_chars(text, text + 64, xval);
+                                *xchrs.ptr = ',';
 
+                                float yval = std::lerp(
+                                    yupper, ylower, (((&ctx->input)->mouse.pos.y - graph_bounds.y) / graph_bounds.h));
+                                auto chrs = std::to_chars(
+                                    xchrs.ptr + 1, text + 64,yval);
+                                size_t text_len = chrs.ptr - text;
+
+                                const struct nk_style *style = &ctx->style;
+                                struct nk_vec2 padding = style->window.padding;
+
+                                float text_width =
+                                    style->font->width(style->font->userdata, style->font->height, text, text_len);
+                                text_width += (4 * padding.x);
+
+                                float text_height = (style->font->height + 2 * padding.y);
+
+                                if (nk_tooltip_begin(ctx, (float)text_width)) {
+                                    nk_layout_row_dynamic(ctx, (float)text_height, 1);
+                                    nk_text(ctx, text, text_len, NK_TEXT_LEFT);
+                                    nk_tooltip_end(ctx);
+                                }
+
+                            }
                             if (nk_input_is_mouse_hovering_rect(&ctx->input, graph_bounds) &&
                                 (&ctx->input)->keyboard.keys[NK_KEY_COPY].down &&
                                 (&ctx->input)->keyboard.keys[NK_KEY_COPY].clicked) {
