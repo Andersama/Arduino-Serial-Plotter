@@ -32,13 +32,13 @@ using namespace simdjson;
 #define NK_KEYSTATE_BASED_INPUT
 #include "nuklear.h"
 #include "nuklear_glfw_gl4.h"
-
+// x,y -> 4 per float, 8 per x,y ergo
+#define MAX_VERTEX_BUFFER 512 * 1024
+#define MAX_ELEMENT_BUFFER (MAX_VERTEX_BUFFER / 4)
+//#define MAX_VERTEX_BUFFER 4096 * 1024
+//#define MAX_ELEMENT_BUFFER 1024 * 1024
 //#define MAX_VERTEX_BUFFER 512 * 1024
 //#define MAX_ELEMENT_BUFFER 128 * 1024
-#define MAX_VERTEX_BUFFER 4096 * 1024
-#define MAX_ELEMENT_BUFFER 1024 * 1024
-//#define MAX_VERTEX_BUFFER 8096 * 1024
-//#define MAX_ELEMENT_BUFFER 2048 * 1024
 
 #ifdef min
 #undef min
@@ -221,17 +221,10 @@ std::string example_json = R"raw({"t": 5649,
           ]
         }
   ]
-}
-0123456789
-0123456789
-0123456789
-0123456789
-
-0123456789
-0123456789
-0123456789
-0123456789 SIMDJSONPADDING
-)raw";
+}                            
+                              
+                               
+                  )raw";
 
 static void error_callback(int e, const char *d) { printf("Error %d: %s\n", e, d); }
 
@@ -476,7 +469,7 @@ template <> struct std::formatter<nk_color> : std::formatter<std::string_view> {
         return format_to(context.out(), "{{{},{},{},{}}}", state.r, state.g, state.b, state.a);
     }
 };
-template <typename T> struct std::formatter<std::vector<T>> : std::formatter<string_view> {
+template <typename T, typename Alloc> struct std::formatter<std::vector<T, Alloc>> : std::formatter<string_view> {
     constexpr auto parse(format_parse_context &ctx) -> decltype(ctx.begin()) {
         auto it = ctx.begin();
         return it;
@@ -558,7 +551,7 @@ size_t get_lsb_set(unsigned int v) noexcept {
     return r;
 }
 
-NK_API void nk_plot_multi(struct nk_context *ctx, enum nk_chart_type type, const float **values, int count, int offset,
+ void nk_plot_multi(struct nk_context *ctx, enum nk_chart_type type, const float **values, int count, int offset,
                           int slots) {
     int i = 0;
     int j = 0;
@@ -589,8 +582,8 @@ NK_API void nk_plot_multi(struct nk_context *ctx, enum nk_chart_type type, const
     }
 }
 
-NK_INTERN nk_flags nk_chart_draw_yticks(struct nk_context *ctx, struct nk_window *win, struct nk_chart *g,
-                                        float yoffset, float xoffset, float spacing, nk_flags alignment) {
+nk_flags nk_chart_draw_yticks(struct nk_context *ctx, struct nk_window *win, struct nk_chart *g, float yoffset,
+                              float xoffset, float spacing, nk_flags alignment) {
     struct nk_panel *layout = win->layout;
     const struct nk_input *i = &ctx->input;
     struct nk_command_buffer *out = &win->buffer;
@@ -694,115 +687,9 @@ NK_INTERN nk_flags nk_chart_draw_yticks(struct nk_context *ctx, struct nk_window
 
     return ret;
 }
-NK_INTERN nk_flags nk_chart_draw_yticks(struct nk_context *ctx, int ticks, nk_flags alignment) {
-    float h = ctx->current->layout->chart.h;
-    float spacing = h / (ticks + 1);
-    float yoffset = spacing / 2.0f;
-    return nk_chart_draw_yticks(ctx, ctx->current, &ctx->current->layout->chart, yoffset, 0.0f, spacing, alignment);
-}
-NK_INTERN nk_flags nk_chart_draw_ytick_value(struct nk_context *ctx, struct nk_window *win, struct nk_chart *g,
-                                             float xoffset, float value, nk_flags alignment) {
-    struct nk_panel *layout = win->layout;
-    const struct nk_input *i = &ctx->input;
-    struct nk_command_buffer *out = &win->buffer;
 
-    const float yoffset = 0.0f;
-
-    nk_flags ret = 0;
-    struct nk_vec2 cur;
-    struct nk_rect bounds;
-    struct nk_color color;
-    float step;
-    float range;
-    float ratio;
-
-    step = g->w / (float)g->slots[0].count;
-    range = g->slots[0].max - g->slots[0].min;
-    ratio = (value - g->slots[0].min) / range;
-
-    float half_step = step / 2.0f;
-
-    float ytick_step = step * 0.25f;
-
-    float h = g->h;
-
-    const struct nk_style *style;
-    struct nk_vec2 item_padding;
-    struct nk_text text;
-
-    style = &ctx->style;
-    item_padding = style->text.padding;
-
-    text.padding.x = item_padding.x;
-    text.padding.y = item_padding.y;
-    text.background = style->window.background;
-    text.text = ctx->style.text.color;
-
-    color = g->slots[0].color;
-    color.a = 128;
-    // cur.x = g->x + (float)(step * (float)g->slots[slot].index);
-    cur.x = g->x;
-
-    float bottom = (g->y + g->h);
-    if (alignment & NK_TEXT_ALIGN_LEFT) {
-        float style_offset = bottom - (style->font->height / 2.0f);
-
-        bounds.x = g->x + step + xoffset;
-        bounds.h = style->font->height;
-        // bounds.w = half_step + xoffset;
-        bounds.y = style_offset - (ratio * g->h);
-
-        float y = bottom - (ratio * g->h);
-
-        nk_stroke_line(out, g->x, y, g->x + half_step, y, 2.0f, nk_color{255, 255, 255, 255});
-
-        char floating_point[64];
-        auto label = std::to_chars(floating_point, (floating_point) + 64, value);
-        *label.ptr = 0;
-        size_t len = label.ptr - floating_point;
-
-        // get the width of the text
-        bounds.w = style->font->width(style->font->userdata, style->font->height, (const char *)floating_point, len);
-
-        // write text
-        nk_fill_rect(&win->buffer, bounds, 0.0f, style->chart.background.data.color);
-        nk_widget_text(&win->buffer, bounds, floating_point, len, &text, NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_BOTTOM,
-                       style->font);
-
-    } else { // NK_TEXT_ALIGN_RIGHT
-        float style_offset = bottom - (style->font->height / 2.0f);
-
-        float right = (g->x + g->w);
-        bounds.h = style->font->height;
-        // bounds.w = half_step + xoffset;
-        float y = bottom - (ratio * g->h);
-
-        nk_stroke_line(out, right - half_step, y, right, y, 2.0f, nk_color{255, 255, 255, 255});
-
-        char floating_point[64];
-        auto label = std::to_chars(floating_point, (floating_point) + 64, value);
-        *label.ptr = 0;
-        size_t len = label.ptr - floating_point;
-        // get the width of the text
-        bounds.w = style->font->width(style->font->userdata, style->font->height, (const char *)floating_point, len);
-        bounds.x = ((right - step) - bounds.w) - xoffset;
-        bounds.y = style_offset - (ratio * g->h);
-
-        // write text
-        nk_fill_rect(&win->buffer, bounds, 0.0f, style->chart.background.data.color);
-        nk_widget_text(&win->buffer, bounds, floating_point, len, &text, NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_BOTTOM,
-                       style->font);
-    }
-
-    return ret;
-}
-NK_INTERN nk_flags nk_chart_draw_ytick_value(struct nk_context *ctx, float value, nk_flags alignment) {
-    return nk_chart_draw_ytick_value(ctx, ctx->current, &ctx->current->layout->chart, 0.0f, value, alignment);
-}
-
-NK_INTERN nk_flags nk_chart_draw_line(struct nk_context *ctx, struct nk_rect chart_bounds, float min_value,
-                                      float max_value, float value, float line_length, float line_thickness,
-                                      nk_color color, nk_flags alignment) {
+nk_flags nk_chart_draw_line(struct nk_context *ctx, struct nk_rect chart_bounds, float min_value, float max_value,
+                            float value, float line_length, float line_thickness, nk_color color, nk_flags alignment) {
     // nk_tooltip(ctx, "text");
     float range = max_value - min_value;
     // ctx->current->
@@ -830,9 +717,9 @@ NK_INTERN nk_flags nk_chart_draw_line(struct nk_context *ctx, struct nk_rect cha
     return 0;
 }
 
-NK_INTERN nk_flags nk_chart_draw_value(struct nk_context *ctx, struct nk_rect chart_bounds, float min_value,
-                                       float max_value, float value, float line_length, float line_thickness,
-                                       nk_color color, nk_flags alignment, nk_flags text_alignment) {
+nk_flags nk_chart_draw_value(struct nk_context *ctx, struct nk_rect chart_bounds, float min_value, float max_value,
+                             float value, float line_length, float line_thickness, nk_color color, nk_flags alignment,
+                             nk_flags text_alignment) {
     float range = max_value - min_value;
 
     char text_value[64];
@@ -899,112 +786,22 @@ NK_INTERN nk_flags nk_chart_draw_value(struct nk_context *ctx, struct nk_rect ch
 
     return 0;
 }
-/*
-NK_INTERN nk_flags nk_chart_draw_tick(struct nk_context *ctx, struct nk_rect chart_bounds, float min_value,
-                                      float max_value, float value, float line_length, float line_thickness,
-                                      nk_color color, nk_flags alignment) {
-    // nk_tooltip(ctx, "text");
-    float range = max_value - min_value;
-    if (alignment & NK_TEXT_ALIGN_LEFT) {
-        float y = (chart_bounds.y + chart_bounds.h) - ((value - min_value) / range) * chart_bounds.h;
-
-        nk_stroke_line(&ctx->current->buffer, chart_bounds.x, y, chart_bounds.x + line_length, y, line_thickness,
-                       color);
-    } else if (alignment & NK_TEXT_ALIGN_TOP) {
-        float x = (chart_bounds.x) + ((value - min_value) / range) * chart_bounds.w;
-
-        nk_stroke_line(&ctx->current->buffer, x, chart_bounds.y, x, chart_bounds.y + line_length, line_thickness,
-                       color);
-    } else if (alignment & NK_TEXT_ALIGN_BOTTOM) {
-        float x = (chart_bounds.x) + ((value - min_value) / range) * chart_bounds.w;
-        float bottom = chart_bounds.y + chart_bounds.h;
-
-        nk_stroke_line(&ctx->current->buffer, x, bottom, x, bottom - line_length, line_thickness, color);
-    } else {
-        float y = (chart_bounds.y + chart_bounds.h) - ((value - min_value) / range) * chart_bounds.h;
-        float right = chart_bounds.x + chart_bounds.w;
-        nk_stroke_line(&ctx->current->buffer, right, y, right - line_length, y, line_thickness, color);
-    }
-}
-*/
-NK_INTERN nk_flags nk_chart_draw_ytick_value(struct nk_context *ctx, struct nk_rect chart_bounds, float min_value,
-                                             float max_value, float value, nk_flags alignment) {
-    // nk_tooltip(ctx, "text");
-}
-
-NK_INTERN nk_flags nk_chart_title(struct nk_context *ctx, const char *title, size_t len, nk_flags alignment) {
-    struct nk_rect bounds;
-    const struct nk_style *style = &ctx->style;
-
-    struct nk_vec2 item_padding;
-    struct nk_text text;
-
-    nk_chart &chart = ctx->current->layout->chart;
-
-    item_padding = style->text.padding;
-    // text settings
-    text.padding.x = item_padding.x;
-    text.padding.y = item_padding.y;
-    text.background = style->window.background;
-    text.text = ctx->style.text.color;
-
-    float step = chart.w / (float)chart.slots[0].count;
-
-    bounds.x = chart.x + 2 * step;
-    bounds.y = chart.y + (style->font->height + 2.0f);
-    bounds.w = chart.w - 4 * step;
-    bounds.h = chart.h + 2 * (style->font->height + 2.0f);
-    // write text
-    // nk_fill_rect(&ctx->current->buffer, bounds, 0.0f, style->chart.background.data.color);
-    nk_widget_text(&ctx->current->buffer, bounds, title, len, &text, alignment, style->font);
-    return nk_flags{0};
-}
-
-NK_INTERN nk_flags nk_chart_slot_title(struct nk_context *ctx, const char *title, size_t len, nk_flags alignment,
-                                       int slot) {
-    struct nk_rect bounds;
-    const struct nk_style *style = &ctx->style;
-
-    struct nk_vec2 item_padding;
-    struct nk_text text;
-
-    nk_chart &chart = ctx->current->layout->chart;
-
-    item_padding = style->text.padding;
-    // text settings
-    text.padding.x = item_padding.x;
-    text.padding.y = item_padding.y;
-    text.background = style->window.background;
-    text.text = chart.slots[slot].color;
-
-    float step = chart.w / (float)chart.slots[0].count;
-
-    bounds.x = chart.x + 2 * step;
-    bounds.y = chart.y + ((style->font->height + 2.0f) * (slot + 2));
-    bounds.w = chart.w - 4 * step;
-    bounds.h = chart.h - 2 * ((style->font->height + 2.0f) * (slot + 2));
-    // bounds.h = style->font->height;
-
-    // write text
-    // nk_fill_rect(&ctx->current->buffer, bounds, 0.0f, style->chart.background.data.color);
-    nk_widget_text(&ctx->current->buffer, bounds, title, len, &text, alignment, style->font);
-    return nk_flags{0};
-}
-
+std::string stream_buffer;
 // returns the number of graphs to draw
-size_t handle_json(struct nk_context *ctx, std::vector<graph_t> &graphs, const char *ptr, uint32_t read_count,
+size_t handle_json(ondemand::parser &parser, struct nk_context *ctx, std::vector<graph_t> &graphs, const char *ptr,
+                   uint32_t read_count,
                    uint32_t alloc_width) {
     if (read_count) {
         std::string_view v{ptr, (size_t)read_count};
         // std::cout << v << '\n';
-        ondemand::parser parser;
+        //ondemand::parser parser;
         ondemand::document graph_data;
         // padded_string json(ptr, (size_t)read_count);
         bool good_utf8 = simdjson::validate_utf8(ptr, read_count);
         auto semi_colon = std::find(ptr, ptr + read_count, '{');
 
         size_t dist = semi_colon - ptr;
-        padded_string_view json(semi_colon, read_count - dist, (alloc_width - 1) - dist);
+        padded_string_view json(semi_colon, read_count - dist, alloc_width - dist);
 
         auto error = parser.iterate(json).get(graph_data);
         if (good_utf8 && !error) {
@@ -1023,8 +820,6 @@ size_t handle_json(struct nk_context *ctx, std::vector<graph_t> &graphs, const c
                 auto err = graph_data["t"].get(ts);
                 if (err) {
                     // could not find timestamp field
-                    std::string_view v{ptr, read_count};
-                    std::cout << v;
                     return false;
                 } else {
                     ondemand::array graphs_array;
@@ -1034,7 +829,6 @@ size_t handle_json(struct nk_context *ctx, std::vector<graph_t> &graphs, const c
                         // could not find the g field (graphs)
                         return false;
                     } else {
-
                         for (auto graph : graphs_array) {
                             // add graph to keep track of
                             if (g >= graphs.size()) {
@@ -1099,35 +893,45 @@ size_t handle_json(struct nk_context *ctx, std::vector<graph_t> &graphs, const c
                                 graphs[g].limit = limit > 0 ? limit : 1;
                             }
 
-                            ondemand::array data_points = graph["d"];
                             float mn = std::numeric_limits<float>::max();
                             float mx = std::numeric_limits<float>::min();
                             uint32_t count = 0;
                             float flt_ts = ts;
-                            for (auto value : data_points) {
-                                if (count >= graphs[g].values.size()) {
-                                    graphs[g].values.emplace_back();
-                                    graphs[g].values[count].reserve(graphs[g].limit);
-                                    graphs[g].labels.emplace_back("");
-                                    graphs[g].colors.emplace_back(ctx->style.chart.color);
-                                }
-                                graphs[g].values[count].emplace_back(flt_ts, (float)(double)value);
-                                //
-                                if (graphs[g].values[count].size() > graphs[g].limit) {
-                                    graphs[g].values[count].erase(graphs[g].values[count].begin());
-                                }
 
-                                count++;
+                            ondemand::array data_points;
+                            if (auto d_err = graph["d"].get_array().get(data_points)) {
+                                return false;
+                            } else {
+                                // go through data points;
+                                for (auto value : data_points) {
+                                    if (count >= graphs[g].values.size()) {
+                                        graphs[g].values.emplace_back();
+                                        graphs[g].values[count].reserve(graphs[g].limit);
+                                        graphs[g].labels.emplace_back("");
+                                        graphs[g].colors.emplace_back(ctx->style.chart.color);
+                                    }
+                                    graphs[g].values[count].emplace_back(flt_ts, (float)(double)value);
+                                    //
+                                    if (graphs[g].values[count].size() > graphs[g].limit) {
+                                        graphs[g].values[count].erase(graphs[g].values[count].begin());
+                                    }
+
+                                    count++;
+                                }
+                                graphs[g].slots = count;
+                                g++;
                             }
-                            graphs[g].slots = count;
-                            g++;
                         }
+                        // send the object out to console, make room from the start
+                        if (v.size() > (cout_buffer.size() - cout_buffer.capacity())) {
+                            cout_buffer.erase(size_t{0}, v.size());
+                        }
+                        format_out("{}", v);
                     }
                 }
-            } catch (const std::exception &exc) {
-                std::cout << exc.what() << '\n';
-                std::cout << v << '\n';
-                // result = false;
+            } catch (const std::exception &err) {
+                cout_buffer.clear();
+                format_out("{}\n\n", err.what(), v); // shouldn't allocate in a catch block
                 g = 0;
             }
             return g;
@@ -1140,6 +944,80 @@ size_t handle_json(struct nk_context *ctx, std::vector<graph_t> &graphs, const c
     }
 }
 
+
+size_t handle_json_stream(ondemand::parser &parser, struct nk_context *ctx, std::vector<graph_t> &graphs, const char *ptr,
+                          uint32_t read_count) {
+
+    // make room for simdjson's scratchbuffer and the incoming data
+    stream_buffer.reserve(stream_buffer.size() + read_count + (SIMDJSON_PADDING+1));
+    // append the data in case we had incomplete data before.
+    stream_buffer.append(ptr, read_count);
+
+    ondemand::document_stream stream;
+
+    auto error = parser.iterate_many(stream_buffer.data(), stream_buffer.size(), stream_buffer.capacity()).get(stream);
+    if (error) {
+        // some serious error occurred, bump forward by 1
+        stream_buffer.erase(size_t{0}, size_t{1});
+        return false;
+    }
+
+    size_t count{0};
+    size_t good_diff{0};
+    size_t graphs_to_display{0};
+
+    for (auto i = stream.begin(); i != stream.end(); ++i) {
+        auto doc = *i;
+        //ondemand::document_reference doc;
+        //auto err = (*i).get(doc);
+        auto err = i.error();
+        if (!err) {
+            std::string_view json_object_view = i.source();
+            size_t g = handle_json(parser, ctx, graphs, json_object_view.data(), json_object_view.size(),
+                                   (stream_buffer.data()+stream_buffer.size())-json_object_view.data());//json_object_view.size() + SIMDJSON_PADDING
+            graphs_to_display = (g > 0 && g != graphs_to_display) ? g : graphs_to_display;
+            good_diff = ((json_object_view.data() + json_object_view.size()) - stream_buffer.data());
+            count++;
+            continue;
+        } 
+        //check on the errors
+        if (err == simdjson::CAPACITY) {
+            break;
+        } else if (err == simdjson::UNINITIALIZED) {
+            // hard error, simdjson did not think any of this was json
+            stream_buffer.clear();
+            return graphs_to_display;
+            //break;//parsed to some end point?
+        } else {
+            //std::cout << "got broken document at " << i.current_index() << std::endl;
+            size_t idx = i.current_index();
+            std::string_view error_view = error_message(err);
+            size_t error_length = std::string_view{"got broken document at {}\n{}:{}\n{}"}.size() + 8 + 8 +
+                                  error_view.size() + stream_buffer.size();
+
+            if (error_length > (cout_buffer.size() - cout_buffer.capacity())) {
+                cout_buffer.erase(size_t{0}, error_length);
+            }
+
+            format_out("got broken document at {}\n{}:{}\n{}", idx, 
+                (size_t)i.error(), error_view,
+                       std::string_view{stream_buffer.data() + idx, stream_buffer.size()-idx});
+            stream_buffer.clear();
+            return graphs_to_display;
+        }
+    }
+    size_t truncated = stream.truncated_bytes();
+    size_t remove_bytes = good_diff ? good_diff : (stream_buffer.size() - truncated);
+    stream_buffer.erase(0, remove_bytes);
+    /*
+    // remove everything that wasn't truncated
+    size_t truncated = stream.truncated_bytes();
+    stream_buffer.erase(stream_buffer.begin(), stream_buffer.begin() + (stream_buffer.size() - truncated));
+    */
+
+    return graphs_to_display;
+}
+
 struct polyline_data {
     struct nk_vec2 *points;
     struct nk_vec2 *points_end;
@@ -1150,13 +1028,25 @@ struct polyline_data {
 void render_polyline(void *canvas, short x, short y, unsigned short w, unsigned short h, nk_handle callback_data) {
     struct nk_draw_list *list = (struct nk_draw_list *)canvas;
     polyline_data *data = (polyline_data *)callback_data.ptr;
-    nk_draw_list_stroke_poly_line(list, data->points, (data->points_end - data->points), data->color, NK_STROKE_OPEN, data->thickness,
-                                  list->config.line_AA);
-    nk_draw_list_path_clear(list);
+    nk_draw_list_stroke_poly_line(list, data->points, (data->points_end - data->points), data->color, NK_STROKE_OPEN,
+data->thickness, list->config.line_AA); nk_draw_list_path_clear(list);
 }
 */
 // application reads from the specified serial port and reports the collected
 // data
+void clear_data(std::vector<graph_t> &graphs) {
+    for (size_t i = 0; i < graphs.size(); i++) {
+        for (size_t s = 0; s < graphs[s].values.size(); s++)
+            graphs[i].values[s].clear();
+        graphs[i].colors.clear();
+        graphs[i].title.clear();
+        graphs[i].points.clear();
+
+        graphs[i].upper_value.value = 0.0f;
+        graphs[i].lower_value.value = 0.0f;
+    }
+}
+
 int main(int argc, char *argv[]) {
     pcg32_random_t rng;
     rng.inc = (ptrdiff_t)&rng;
@@ -1164,11 +1054,31 @@ int main(int argc, char *argv[]) {
     rng.state = std::chrono::steady_clock::now().time_since_epoch().count();
     pcg32_random_r(&rng);
 
+    //bool valid_input = simdjson::validate_utf8(example_json);
+    //std::cout << valid_input << '\n';
+    //auto json = R"([1,2,3]  {"1":1,"2":3,"4":4} {"key":"intentionally unclosed string  )"_padded;
+    
+    simdjson::ondemand::parser parser;
+    simdjson::ondemand::document_stream stream;
+    auto error = parser.iterate_many(example_json, example_json.size() - SIMDJSON_PADDING).get(stream);
+    if (error) {
+        std::cerr << error << std::endl;
+        return 1;
+    }
+    for (auto i = stream.begin(); i != stream.end(); ++i) {
+        std::string_view v = i.source();
+        std::cout << v << std::endl;
+    }
+    size_t t = stream.truncated_bytes();
+    std::cout << t << " bytes " << std::endl; // returns 39 bytes 
+    
+    
     // pcg32_random_r
     std::vector<graph_t> graphs;
     graphs.reserve(32);
 
     cout_buffer.reserve(1024);
+    stream_buffer.reserve(4096);
     /*GUI THINGS*/
     /* Platform */
     static GLFWwindow *win;
@@ -1235,6 +1145,10 @@ int main(int argc, char *argv[]) {
     size_t sz = _msize(ptr);
     sz = sz > alloc_width ? sz : alloc_width;
 
+    char *edit_ptr = (char *)calloc(alloc_width, 1);
+    size_t edit_sz = _msize(edit_ptr);
+    edit_sz = edit_sz > alloc_width ? edit_sz : alloc_width;
+
     char *txtedit = (char *)calloc(alloc_width, 1);
     size_t txtedit_sz = _msize(txtedit);
     txtedit_sz = txtedit_sz > alloc_width ? txtedit_sz : alloc_width;
@@ -1257,6 +1171,7 @@ int main(int argc, char *argv[]) {
     }
 
     int read_count = 0;
+    int edit_count = 0;
     // make sure we 0
     ptr[0] = 0;
     char *bufend = ptr;
@@ -1264,10 +1179,14 @@ int main(int argc, char *argv[]) {
 
     std::string comport_path;
     std::string graph_title;
+    std::string edit_string;
 
     size_t last_timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
-    bool demo_mode = true;
-    bool example_json_mode = false;
+    size_t last_ok_timestamp = last_timestamp;
+
+    int demo_mode = true;
+    int data_auto_scroll = true;
+    int example_json_mode = false;
 
     nk_colorf picker_color;
     uint32_t baud_rate = 115200;
@@ -1275,9 +1194,21 @@ int main(int argc, char *argv[]) {
     size_t graphs_to_display = 0;
 
     float zoom_factor = 0.20;
-    float zoom_rate = 0.003f;
+    float zoom_rate = 0.01f;
     /* Main Loop */
     struct nk_rect window_bounds = nk_rect(0, 0, width, height);
+
+    const size_t bytes_per_second = baud_rate / 8;
+    const size_t full_buffer = (mx_width - (2 * SIMDJSON_PADDING));
+    const size_t ns_per_second = 1'000'000'000;
+    const size_t ms_per_ns = 1'000'000;
+
+    size_t baud_delay = ((full_buffer * ns_per_second) / bytes_per_second) + (2 * ms_per_ns);
+    //size_t delay = 1'000'000'000;
+    size_t frame_rate_delay = 33'000'000;
+    size_t delay = 33'000'000;
+    delay = NK_MIN(baud_delay, frame_rate_delay);
+
     while (!glfwWindowShouldClose(win)) {
         /* Input */
         glfwPollEvents();
@@ -1305,6 +1236,10 @@ int main(int argc, char *argv[]) {
                 nk_edit_string(ctx, NK_EDIT_SIMPLE, txtedit, txtedit_len, 4, nk_filter_decimal);
 
                 if (SerialPort.IsConnected()) {
+                    if (demo_mode) { // if we were in demo mode clear data
+                        clear_data(graphs);
+                        graphs_to_display = 0;
+                    }
                     demo_mode = false;
                     if (nk_button_label(ctx, "Disconnect")) {
                         SerialPort.Disconnect();
@@ -1324,6 +1259,16 @@ int main(int argc, char *argv[]) {
                             result = SerialPort.Connect(comport_path.data(), false, baud_rate);
                         print_out("{}", result != 0 ? "success!" : "failed!");
 
+                        if (result) {
+                            const size_t bytes_per_second = baud_rate / 8;
+                            const size_t full_buffer = (mx_width - (2 * SIMDJSON_PADDING));
+                            const size_t ns_per_second = 1'000'000'000;
+                            const size_t ns_per_ms = 1'000'000;
+
+                            size_t baud_delay = ((full_buffer * ns_per_second) / bytes_per_second) + (2 * ns_per_ms);
+                            delay = baud_delay;
+                        }
+
                         if (result)
                             demo_mode = false;
                     }
@@ -1338,24 +1283,104 @@ int main(int argc, char *argv[]) {
                 // nk_slider_float(ctx, 0.0f, &zoom_factor, 1.5f, 0.001f);
                 nk_property_float(ctx, "Zoom", 0.0, &zoom_factor, 1.5f, 0.01f, 0.01f);
                 nk_property_float(ctx, "Rate", 0.0, &zoom_rate, 1.0, 0.0001f, 0.0001f);
-                // nk_label(ctx, "Zoom Rate: ", NK_TEXT_LEFT);
-                // nk_slider_float(ctx, 0.0f, &zoom_rate, 1.0f, 0.001f);
-                // nk_label(ctx, "")
+                nk_checkbox_label(ctx, "Demo", &demo_mode);
+                nk_checkbox_label(ctx, "Random/Json", &example_json_mode);
+
+                if (nk_tree_push_hashed(ctx, NK_TREE_TAB, "Data", nk_collapse_states::NK_MINIMIZED, "_", 1, __LINE__)) {
+                    nk_layout_row_dynamic(ctx, 30, 2);
+                    nk_label(ctx, "Data:", NK_TEXT_LEFT);
+                    // nk_layout_row_static(ctx, 180, 278, 1);
+                    if (nk_button_label(ctx, "Clear")) {
+                        cout_buffer.clear();
+                    }
+                    nk_checkbox_label(ctx, "Autoscroll", &data_auto_scroll);
+
+                    int len = cout_buffer.size();
+                    nk_layout_row_dynamic(ctx, 278, 1);
+                    //(NK_EDIT_MULTILINE | NK_EDIT_ALLOW_TAB | NK_EDIT_CLIPBOARD | NK_EDIT_READ_ONLY)
+                    nk_edit_string(ctx, (NK_EDIT_BOX), cout_buffer.data(), &len, cout_buffer.capacity(),
+                                   nk_filter_default);
+                    /*
+                    edit->scrollbar.y = nk_do_scrollbarv(&ws, out, scroll, 0, scroll_offset, scroll_target, scroll_step,
+                                                         scroll_inc, &style->scrollbar, in, font);
+                    */
+                    nk_tree_pop(ctx);
+                }
+
+                if (nk_tree_push_hashed(ctx, NK_TREE_TAB, "Input", nk_collapse_states::NK_MINIMIZED, "_", 1,
+                                        __LINE__)) {
+                    nk_layout_row_dynamic(ctx, 30, 2);
+                    nk_label(ctx, "Data:", NK_TEXT_LEFT);
+
+                    // nk_layout_row_static(ctx, 180, 278, 1);
+                    if (nk_button_label(ctx, "Send")) {
+                        // make sure we have padding for simdjson
+                        edit_string.reserve(edit_string.size() + (2 * SIMDJSON_PADDING));
+                        size_t g =
+                            handle_json(parser, ctx, graphs, edit_string.data(), edit_string.size(), edit_string.capacity());
+
+                        graphs_to_display = (g > 0 && g != graphs_to_display) ? g : graphs_to_display;
+
+                        edit_string.clear();
+                        edit_count = 0;
+                    }
+
+                    nk_layout_row_dynamic(ctx, 278, 1);
+
+                    // get the area for the next widget
+                    struct nk_rect edit_bounds = nk_widget_bounds(ctx);
+                    // check if the user is doing something with the keyboard
+                    bool any_key = ctx->input.keyboard.text_len > 0;
+                    if (any_key) {
+                        edit_string.reserve(edit_string.size() + ctx->input.keyboard.text_len);
+                    }
+
+                    if (nk_input_is_mouse_hovering_rect(&ctx->input, edit_bounds) &&
+                        nk_input_is_key_down(&ctx->input, nk_keys::NK_KEY_PASTE)) {
+                        const char *clipboard = glfwGetClipboardString(glfw.win);
+                        edit_string.reserve(edit_string.size() + strlen(clipboard));
+                    }
+
+                    edit_count = edit_string.size();
+                    nk_edit_string(ctx, NK_EDIT_BOX, edit_string.data(), &edit_count, edit_string.capacity(),
+                                   nk_filter_default);
+                    // change data to fit
+                    edit_string.assign(edit_string.data(), edit_string.data() + edit_count);
+
+                    nk_tree_pop(ctx);
+                }
+                nk_layout_row_dynamic(ctx, 30, 4);
+                char recieved[64] = "timestamp: ";
+                auto chrs = std::to_chars(recieved + 11, recieved + 64, last_ok_timestamp);
+                *chrs.ptr = 0;
+                nk_label(ctx, recieved, NK_TEXT_LEFT);
+
+                char recieved2[64] = "last: ";
+                chrs = std::to_chars(recieved2 + 6, recieved2 + 64, last_timestamp);
+                *chrs.ptr = 0;
+                nk_label(ctx, recieved2, NK_TEXT_LEFT);
+
+                char delay_text[64] = "delay (ms): ";
+                chrs = std::to_chars(delay_text + 12, delay_text + 64, delay / 1000000);
+                *chrs.ptr = 0;
+                nk_label(ctx, delay_text, NK_TEXT_LEFT);
+
+                char delay_text2[64] = "delay (ns): ";
+                chrs = std::to_chars(delay_text2 + 12, delay_text2 + 64, delay);
+                *chrs.ptr = 0;
+                nk_label(ctx, delay_text2, NK_TEXT_LEFT);
+
                 nk_tree_pop(ctx);
             }
             // nk_menubar_end(ctx);
 
             /* COM GUI */
             bg.r = 0.10f, bg.g = 0.18f, bg.b = 0.24f, bg.a = 1.0f;
-            size_t current_timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
-            const size_t bytes_per_second = baud_rate / 8;
-            const size_t full_buffer = (mx_width - (2 * SIMDJSON_PADDING));
-            const size_t ns_per_second = 1'000'000'000;
-            const size_t ms_per_ns = 1'000'000;
-            size_t delay = ((full_buffer * ns_per_second) / bytes_per_second) + (2 * ms_per_ns);
+            size_t current_timestamp = std::chrono::steady_clock::now().time_since_epoch().count();            
 
             // 1'000'000'000 ns => 1 second
-            if (SerialPort.IsConnected() && ((current_timestamp - last_timestamp) > delay)) { // attempt to graph graphs
+            size_t timestamp_diff = (current_timestamp - last_timestamp);
+            if (SerialPort.IsConnected() && (timestamp_diff > delay)) { // attempt to graph graphs
                                                                                               // from incoming
                                                                                               // data
                 /* Serial Stuff */
@@ -1364,13 +1389,21 @@ int main(int argc, char *argv[]) {
                 ptr[read_count] = 0;
 
                 if (read_count) {
-                    size_t g = handle_json(ctx, graphs, ptr, read_count, alloc_width);
+                    size_t g = handle_json_stream(parser, ctx, graphs, ptr, read_count);
+                    last_ok_timestamp = g > 0 ? current_timestamp : last_ok_timestamp;
+                    delay = g > 0 ? timestamp_diff : delay;
+
                     graphs_to_display = (g > 0 && g != graphs_to_display) ? g : graphs_to_display;
                 }
             } else if (demo_mode && example_json_mode) {
-                size_t g = handle_json(ctx, graphs, example_json.data(), example_json.size() - (2 * SIMDJSON_PADDING),
-                                       example_json.size());
+                size_t g = handle_json_stream(parser, ctx, graphs, example_json.data(),
+                                              example_json.size());
                 graphs_to_display = (g > 0 && g != graphs_to_display) ? g : graphs_to_display;
+                for (size_t i = 0; i < graphs_to_display; i++) {
+                    for (size_t s = 0; s < graphs[i].values.size(); s++) {
+                        graphs[i].values[s].back().x += (pcg32_random_r(&rng) & 64);
+                    }
+                }
             } else if (demo_mode) {
                 graphs_to_display = 6;
                 for (size_t i = 0; i < graphs_to_display; i++) {
@@ -1635,14 +1668,14 @@ int main(int argc, char *argv[]) {
                             /*
                             nk_stroke_polyline(&ctx->current->buffer, line_data, graphs[i].values[s].size(), 1.0f,
                                                graphs[i].colors[s]);
-                            */                 
-                                               
+                            */
+
                             nk_stroke_polyline_float(&ctx->current->buffer, line_data, graphs[i].values[s].size(), 1.0f,
-                                               graphs[i].colors[s]);
-                                               
-                            //struct nk_handle h;
-                            //h.ptr = &graphs[i].lin
-                            //nk_push_custom(&ctx->current->buffer, graph_bounds, render_polyline, );
+                                                     graphs[i].colors[s]);
+
+                            // struct nk_handle h;
+                            // h.ptr = &graphs[i].lin
+                            // nk_push_custom(&ctx->current->buffer, graph_bounds, render_polyline, );
                             struct nk_vec2 item_padding;
                             struct nk_text slot_text;
                             item_padding = (&ctx->style)->text.padding;
@@ -1814,6 +1847,7 @@ int main(int argc, char *argv[]) {
          * state after rendering the UI. */
         nk_glfw3_render(NK_ANTI_ALIASING_ON);
         glfwSwapBuffers(win);
+        Sleep(16);
         // Sleep(100);
     }
 

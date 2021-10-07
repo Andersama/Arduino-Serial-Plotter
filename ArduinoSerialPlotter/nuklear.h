@@ -4530,7 +4530,7 @@ extern "C" {
         struct nk_color color;
         unsigned short line_thickness;
         unsigned short point_count;
-        struct nk_vec2 *points; //struct nk_vec2 points[1];
+        struct nk_vec2 *points;
     };
 
     struct nk_command_image {
@@ -7304,12 +7304,12 @@ nk_murmur_hash(const void* key, int len, nk_hash seed)
     switch (len & 3) {
     case 3: k1 ^= (nk_uint)(tail[2] << 16); /* fallthrough */
     case 2: k1 ^= (nk_uint)(tail[1] << 8u); /* fallthrough */
-    case 1: k1 ^= tail[0];
+    case 1: k1 ^= tail[0]; 
         k1 *= c1;
         k1 = NK_ROTL(k1, 15);
         k1 *= c2;
         h1 ^= k1;
-        break;
+        break;/* fallthrough */
     default: break;
     }
 
@@ -9159,14 +9159,12 @@ NK_API void
 nk_stroke_polyline_float(struct nk_command_buffer* b, float* points, int point_count,
     float line_thickness, struct nk_color col)
 {
-    int i;
     nk_size size = 0;
     struct nk_command_polyline_float *cmd;
 
     NK_ASSERT(b);
     if (!b || col.a == 0 || line_thickness <= 0) return;
     size = sizeof(*cmd);
-    //+ sizeof(float) * 2 * (nk_size)point_count;
     cmd = (struct nk_command_polyline_float*)nk_command_buffer_push(b, NK_COMMAND_POLYLINE_FLOAT, size);
     if (!cmd) return;
     cmd->color = col;

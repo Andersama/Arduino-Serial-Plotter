@@ -29287,7 +29287,10 @@ namespace simdjson {
                          * So we need to re-anchor the json_iterator after each call to stage 1 so that
                          * all of the pointers are in sync.
                          */
-                        doc.iter = json_iterator(&buf[batch_start], parser);
+                        //doc.iter = json_iterator(&buf[batch_start], parser);
+                        if (error == UNINITIALIZED)
+                            break;
+                        doc.iter = json_iterator(buf+batch_start, parser);
                         doc.iter._streaming = true;
                         /**
                          * End of resync.
