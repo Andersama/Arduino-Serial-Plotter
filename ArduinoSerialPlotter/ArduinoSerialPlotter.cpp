@@ -910,9 +910,10 @@ nk_flags nk_chart_draw_value(struct nk_context *ctx, struct nk_rect chart_bounds
     return 0;
 }
 std::string stream_buffer;
-// returns the number of graphs to draw
+// returns the number of graphs to draw, 0 -> no data / no change
 size_t handle_json(ondemand::parser &parser, struct nk_context *ctx, real::vector<graph_t> &graphs, const char *ptr,
                    uint32_t read_count) {
+    size_t graphs_to_display = 0;
     if (read_count) {
         // make room for simdjson's scratchbuffer and the incoming data
         if (stream_buffer.capacity() < (stream_buffer.size() + read_count + (SIMDJSON_PADDING + 1)))
@@ -925,7 +926,7 @@ size_t handle_json(ondemand::parser &parser, struct nk_context *ctx, real::vecto
         // validate buffer is utf8 once
         if (!simdjson::validate_utf8(stream_buffer.data(), stream_buffer.size()))
             return false;
-        size_t g = 0;
+        
         do {
             ondemand::document graph_data;
 
@@ -936,7 +937,7 @@ size_t handle_json(ondemand::parser &parser, struct nk_context *ctx, real::vecto
             padded_string_view json(stream_buffer.data() + dist, stream_buffer.size() - dist,
                                     stream_buffer.capacity() - dist);
             auto error = parser.iterate(json).get(graph_data);
-
+            size_t g = 0;
             if (!error) {
                 // bool result = true;
                 std::string_view v;
@@ -1086,16 +1087,16 @@ size_t handle_json(ondemand::parser &parser, struct nk_context *ctx, real::vecto
                     g = 0;
                     stream_buffer.erase(stream_buffer.begin());
                 }
-
+                graphs_to_display = g > 0 ? g : graphs_to_display;
             } else {
                 stream_buffer.erase(size_t{0}, dist ? dist : size_t{1});
                 // stream_buffer.erase(stream_buffer.begin());
-                return false;
+                return graphs_to_display = 0;
             }
         } while (stream_buffer.size() >= 512);
-        return g;
+        return graphs_to_display;
     } else {
-        return false;
+        return graphs_to_display;
     }
 }
 
@@ -1247,7 +1248,7 @@ int main(int argc, char *argv[]) {
     int data_auto_scroll = true;
     int example_json_mode = false;
 
-    uint32_t baud_rate = 115200;
+    int baud_rate = 115200;
 
     size_t graphs_to_display = 0;
 
@@ -1288,10 +1289,12 @@ int main(int argc, char *argv[]) {
 
             // nk_menubar_begin(ctx);
             if (nk_tree_push_hashed(ctx, NK_TREE_TAB, "Options", nk_collapse_states::NK_MAXIMIZED, "_", 1, __LINE__)) {
-                nk_layout_row_dynamic(ctx, 30, 3);
+                nk_layout_row_dynamic(ctx, 30, 4);
 
                 nk_label(ctx, "COM Port:", NK_TEXT_LEFT);
                 nk_edit_string(ctx, NK_EDIT_SIMPLE, txtedit, txtedit_len, 4, nk_filter_decimal);
+
+                nk_property_int(ctx, "Baud", 9600, &baud_rate, INT_MAX, 1, 1.0f);
 
                 if (SerialPort.IsConnected()) {
                     if (demo_mode) { // if we were in demo mode clear data
