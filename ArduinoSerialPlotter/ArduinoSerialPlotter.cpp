@@ -5,7 +5,9 @@
 #include "ArduinoSerialPlotter.h"
 
 #include "SerialClass.h" // Library described above
-#include <format>
+#include <charconv>
+#include <fmt/core.h>
+#include <fmt/format.h>
 #include <math.h>
 #include <ostream>
 #include <stdio.h>
@@ -64,11 +66,11 @@ uint32_t pcg32_random_r(pcg32_random_t *rng) {
 }
 
 std::unordered_map<std::string_view, nk_color> color_map = {
-    {"red", nk_color(255, 0, 0, 255)},      {"green", nk_color(0, 255, 0, 255)},
-    {"blue", nk_color(0, 0, 255, 255)},     {"orange", nk_color(255, 153, 51, 255)},
-    {"yellow", nk_color(255, 255, 0, 255)}, {"pink", nk_color(255, 51, 204, 255)},
-    {"purple", nk_color(172, 0, 230, 255)}, {"cyan", nk_color(0, 255, 255, 255)},
-    {"white", nk_color(255, 255, 255, 255)}};
+    {"red", nk_color{255, 0, 0, 255}},      {"green", nk_color{0, 255, 0, 255}},
+    {"blue", nk_color{0, 0, 255, 255}},     {"orange", nk_color{255, 153, 51, 255}},
+    {"yellow", nk_color{255, 255, 0, 255}}, {"pink", nk_color{255, 51, 204, 255}},
+    {"purple", nk_color{172, 0, 230, 255}}, {"cyan", nk_color{0, 255, 255, 255}},
+    {"white", nk_color{255, 255, 255, 255}}};
 
 nk_color get_color(std::string_view v) {
     auto it = color_map.find(v);
@@ -230,13 +232,13 @@ static void error_callback(int e, const char *d) { printf("Error %d: %s\n", e, d
 
 std::string cout_buffer;
 template <typename... Args> void print_out(Args &&...args) {
-    std::format_to(std::back_inserter(cout_buffer), std::forward<Args>(args)...);
+    fmt::format_to(std::back_inserter(cout_buffer), std::forward<Args>(args)...);
     std::cout << cout_buffer;
     cout_buffer.clear();
 }
 
 template <typename... Args> void format_out(Args &&...args) {
-    std::format_to(std::back_inserter(cout_buffer), std::forward<Args>(args)...);
+    fmt::format_to(std::back_inserter(cout_buffer), std::forward<Args>(args)...);
     std::cout << cout_buffer;
     // cout_buffer.clear();
 }
@@ -323,7 +325,9 @@ std::ostream &operator<<(std::ostream &os, const struct nk_vec2 &vec) {
     return os;
 }
 
-template <> struct std::formatter<struct nk_vec2> : std::formatter<std::string_view> {
+template <>
+struct fmt::formatter<struct nk_vec2, char> :
+    fmt::formatter<std::string_view> {
     constexpr auto parse(format_parse_context &ctx) -> decltype(ctx.begin()) {
         auto it = ctx.begin();
         return it;
@@ -459,7 +463,7 @@ template <typename M> std::string json_dump_associative_container(const M &map) 
     return oss.str();
 }
 
-template <> struct std::formatter<nk_color> : std::formatter<std::string_view> {
+template <> struct fmt::formatter<nk_color> : fmt::formatter<std::string_view> {
     constexpr auto parse(format_parse_context &ctx) -> decltype(ctx.begin()) {
         auto it = ctx.begin();
         return it;
@@ -469,7 +473,7 @@ template <> struct std::formatter<nk_color> : std::formatter<std::string_view> {
         return format_to(context.out(), "{{{},{},{},{}}}", state.r, state.g, state.b, state.a);
     }
 };
-template <typename T, typename Alloc> struct std::formatter<std::vector<T, Alloc>> : std::formatter<string_view> {
+template <typename T, typename Alloc> struct fmt::formatter<std::vector<T, Alloc>> : fmt::formatter<string_view> {
     constexpr auto parse(format_parse_context &ctx) -> decltype(ctx.begin()) {
         auto it = ctx.begin();
         return it;
@@ -501,11 +505,11 @@ template <typename T> std::string format_array(std::vector<T> &vec) {
     std::string out;
     auto out_it = std::back_inserter(out);
 
-    std::format_to(out_it, "[");
+    fmt::format_to(out_it, "[");
     for (size_t i = 0; i < vec.size(); i++) {
-        std::format_to(out_it, "{}{}", (i ? "," : ""), vec[i]);
+        fmt::format_to(out_it, "{}{}", (i ? "," : ""), vec[i]);
     }
-    std::format_to(out_it, "]");
+    fmt::format_to(out_it, "]");
 
     return out;
 }
@@ -513,11 +517,11 @@ template <typename T> std::string format_array(std::vector<T> &vec) {
 template <typename T> std::string format_array(std::string &out, std::vector<T> &vec) {
     auto out_it = std::back_inserter(out);
 
-    std::format_to(out_it, "[");
+    fmt::format_to(out_it, "[");
     for (size_t i = 0; i < vec.size(); i++) {
-        std::format_to(out_it, "{}{}", (i ? "," : ""), vec[i]);
+        fmt::format_to(out_it, "{}{}", (i ? "," : ""), vec[i]);
     }
-    std::format_to(out_it, "]");
+    fmt::format_to(out_it, "]");
 
     return out;
 }
@@ -525,19 +529,19 @@ template <typename T> std::string format_array(std::string &out, std::vector<T> 
 std::string graphs_to_string(std::vector<graph_t> &graphs) {
     std::string out;
     auto out_it = std::back_inserter(out);
-    std::format_to(out_it, "[{}", "\n");
+    fmt::format_to(out_it, "[{}", "\n");
     for (size_t i = 0; i < graphs.size(); i++) {
-        std::format_to(out_it, "{}", i ? ",{" : "{");
-        std::format_to(out_it, "\n\t't':\"{}\"", sanitize(graphs[i].title));
+        fmt::format_to(out_it, "{}", i ? ",{" : "{");
+        fmt::format_to(out_it, "\n\t't':\"{}\"", sanitize(graphs[i].title));
 
-        std::format_to(out_it, "\n\t'l':{},", json_dump_simple_container(graphs[i].labels, graphs[i].limit));
+        fmt::format_to(out_it, "\n\t'l':{},", json_dump_simple_container(graphs[i].labels, graphs[i].limit));
 
-        std::format_to(out_it, "\n\t'c':{},", json_dump_simple_container(graphs[i].colors), graphs[i].limit);
+        fmt::format_to(out_it, "\n\t'c':{},", json_dump_simple_container(graphs[i].colors), graphs[i].limit);
 
-        std::format_to(out_it, "\n\t'd':{}", json_dump_simple_container(graphs[i].values, graphs[i].limit));
-        std::format_to(out_it, "{}", '}');
+        fmt::format_to(out_it, "\n\t'd':{}", json_dump_simple_container(graphs[i].values, graphs[i].limit));
+        fmt::format_to(out_it, "{}", '}');
     }
-    std::format_to(out_it, "\n]");
+    fmt::format_to(out_it, "\n]");
 
     return out;
 }
@@ -910,7 +914,11 @@ size_t handle_json(ondemand::parser &parser, struct nk_context *ctx, std::vector
                                         graphs[g].labels.emplace_back("");
                                         graphs[g].colors.emplace_back(ctx->style.chart.color);
                                     }
-                                    graphs[g].values[count].emplace_back(flt_ts, (float)(double)value);
+                                    //struct nk_vec2{flt_ts, (float)(double)value}
+                                    struct nk_vec2 point;
+                                    point.x = flt_ts;
+                                    point.y = (float)(double)value;
+                                    graphs[g].values[count].emplace_back(point);
                                     //
                                     if (graphs[g].values[count].size() > graphs[g].limit) {
                                         graphs[g].values[count].erase(graphs[g].values[count].begin());
@@ -926,12 +934,15 @@ size_t handle_json(ondemand::parser &parser, struct nk_context *ctx, std::vector
                         if (v.size() > (cout_buffer.size() - cout_buffer.capacity())) {
                             cout_buffer.erase(size_t{0}, v.size());
                         }
-                        format_out("{}", v);
+                        cout_buffer.append(v);
+                        //fmt::format_to(std::back_inserter(cout_buffer), "")
+                        //format_out("{}", v);
                     }
                 }
             } catch (const std::exception &err) {
                 cout_buffer.clear();
-                format_out("{}\n\n", err.what(), v); // shouldn't allocate in a catch block
+                fmt::format_to(std::back_inserter(cout_buffer), "{}\n\n{}", err.what(), v);
+                //format_out("{}\n\n", err.what(), v); // shouldn't allocate in a catch block
                 g = 0;
             }
             return g;
@@ -955,7 +966,11 @@ size_t handle_json_stream(ondemand::parser &parser, struct nk_context *ctx, std:
 
     ondemand::document_stream stream;
 
-    auto error = parser.iterate_many(stream_buffer.data(), stream_buffer.size(), stream_buffer.capacity()).get(stream);
+    const char *stream_ptr = stream_buffer.data();
+    auto left_brace = std::find(stream_ptr, stream_ptr + stream_buffer.size(), '{');
+    size_t dist = left_brace - stream_ptr;
+
+    auto error = parser.iterate_many(stream_ptr, stream_buffer.size()-dist, stream_buffer.capacity()-dist).get(stream);
     if (error) {
         // some serious error occurred, bump forward by 1
         stream_buffer.erase(size_t{0}, size_t{1});
@@ -998,10 +1013,13 @@ size_t handle_json_stream(ondemand::parser &parser, struct nk_context *ctx, std:
             if (error_length > (cout_buffer.size() - cout_buffer.capacity())) {
                 cout_buffer.erase(size_t{0}, error_length);
             }
-
+            /*
             format_out("got broken document at {}\n{}:{}\n{}", idx, 
                 (size_t)i.error(), error_view,
                        std::string_view{stream_buffer.data() + idx, stream_buffer.size()-idx});
+                       */
+            fmt::format_to(std::back_inserter(cout_buffer), "broken document at {}\n{}:{}\n{}", idx, (size_t)i.error(),
+                           error_view, std::string_view{stream_buffer.data() + idx, stream_buffer.size() - idx});
             stream_buffer.clear();
             return graphs_to_display;
         }
@@ -1247,17 +1265,20 @@ int main(int argc, char *argv[]) {
                 } else {
                     if (nk_button_label(ctx, "Connect")) {
                         comport_path.clear();
-                        std::format_to(std::back_inserter(comport_path), std::string_view{"\\\\.\\COM{}"},
+                        fmt::format_to(std::back_inserter(comport_path), std::string_view{"\\\\.\\COM{}"},
                                        std::string_view{txtedit, (size_t)txtedit_len[0]});
 
-                        print_out(std::string_view{"attempting to connect to {}...\n"}, comport_path);
+                        //print_out(std::string_view{"attempting to connect to {}...\n"}, comport_path);
+                        fmt::format_to(std::back_inserter(cout_buffer), "attempting to connect to {}...", comport_path);
 
                         uint32_t port_num = 0;
                         std::from_chars(txtedit, (txtedit + ((size_t)txtedit_len)), port_num, 10);
                         int result = SerialPort.Connect(port_num, false, baud_rate);
                         if (result == 0)
                             result = SerialPort.Connect(comport_path.data(), false, baud_rate);
-                        print_out("{}", result != 0 ? "success!" : "failed!");
+                        //print_out(std::string_view{"{}"}, result != 0 ? std::string_view{"success!"} : std::string_view{"failed!"});
+                        fmt::format_to(std::back_inserter(cout_buffer), std::string_view{"{}"},
+                                  result != 0 ? std::string_view{"success!"} : std::string_view{"failed!"});
 
                         if (result) {
                             const size_t bytes_per_second = baud_rate / 8;
@@ -1399,9 +1420,11 @@ int main(int argc, char *argv[]) {
                 size_t g = handle_json_stream(parser, ctx, graphs, example_json.data(),
                                               example_json.size());
                 graphs_to_display = (g > 0 && g != graphs_to_display) ? g : graphs_to_display;
+                size_t ts = std::chrono::steady_clock::now().time_since_epoch().count();
+                float flt_ts = ts / 1000000.0f;
                 for (size_t i = 0; i < graphs_to_display; i++) {
                     for (size_t s = 0; s < graphs[i].values.size(); s++) {
-                        graphs[i].values[s].back().x += (pcg32_random_r(&rng) & 64);
+                        graphs[i].values[s].back().x = flt_ts;
                     }
                 }
             } else if (demo_mode) {
@@ -1415,7 +1438,7 @@ int main(int argc, char *argv[]) {
                     graphs[i].slots = 2;
                     if (graphs[i].title.empty()) {
                         graphs[i].title.clear();
-                        std::format_to(std::back_inserter(graphs[i].title), "graph #{}", i);
+                        fmt::format_to(std::back_inserter(graphs[i].title), "graph #{}", i);
                     }
 
                     // fill with all the potential colors
@@ -1440,11 +1463,15 @@ int main(int argc, char *argv[]) {
                     for (size_t s = 0; s < graphs[i].values.size(); s++) {
                         if (graphs[i].labels[s].empty()) {
                             graphs[i].labels[s].clear();
-                            std::format_to(std::back_inserter(graphs[i].labels[s]), "data #{}", s);
+                            fmt::format_to(std::back_inserter(graphs[i].labels[s]), "data #{}", s);
                         }
 
                         graphs[i].values[s].reserve(graphs[i].limit + 1);
+                        
                         for (size_t l = graphs[i].values[s].size(); l < graphs[i].limit; l++) {
+                            #if __clang__
+                                //graphs[i].values[s].emplace_back();
+                            #else
                             if (graphs[i].values[s].size() < 1)
                                 graphs[i].values[s].emplace_back(0.0f, 0.0f);
                             else
@@ -1452,19 +1479,34 @@ int main(int argc, char *argv[]) {
                                                                  graphs[i].values[s].back().y +
                                                                      ((pcg32_random_r(&rng) % 256) / 1024.0f) -
                                                                      (128 / 1024.0f));
+                            #endif                                         
                         }
+                        
                     }
 
+                    size_t ts = std::chrono::steady_clock::now().time_since_epoch().count();
+                    float flt_ts = ts / 1000000.0f;
                     for (size_t s = 0; s < graphs[i].values.size(); s++) {
                         // fill with data point
+                        #if __clang__
+                        struct nk_vec2 &vec = graphs[i].values[s].emplace_back();
+                        if (graphs[i].values[s].size()) {
+                            vec.x = flt_ts;
+                            vec.y = graphs[i].values[s][graphs[i].values[s].size()-1].y +
+                                    ((pcg32_random_r(&rng) % 256) / 1024.0f) - (128 / 1024.0f);
+                        }
+                        if (graphs[i].values[s].size() > graphs[i].limit) {
+                            graphs[i].values[s].erase(graphs[i].values[s].begin());
+                        }
+                        #else
                         if (graphs[i].values[s].size() < 1)
-                            graphs[i].values[s].emplace_back(0.0f, 0.0f);
-                        graphs[i].values[s].emplace_back(
-                            graphs[i].values[s].back().x + 0.001f,
+                            graphs[i].values[s].emplace_back(flt_ts, 0.0f);
+                        graphs[i].values[s].emplace_back(flt_ts,
                             graphs[i].values[s].back().y + ((pcg32_random_r(&rng) % 256) / 1024.0f) - (128 / 1024.0f));
                         if (graphs[i].values[s].size() > graphs[i].limit) {
                             graphs[i].values[s].erase(graphs[i].values[s].begin());
                         }
+                        #endif
                     }
                 }
             }
@@ -1640,8 +1682,8 @@ int main(int argc, char *argv[]) {
 
                         float ylimrange = yupper - ylower;
                         float yspacing = ylimrange / (float)(yticks + 1);
-                        float yoffset = yspacing / 2.0f;
-                        float xstep = graph_bounds.w / graphs[i].limit;
+                        //float yoffset = yspacing / 2.0f;
+                        //float xstep = graph_bounds.w / graphs[i].limit;
 
                         for (size_t s = 0; s < graphs[i].values.size() && s < graphs[i].slots; s++) {
                             float *line_data = data + point_idx;
@@ -1715,7 +1757,7 @@ int main(int argc, char *argv[]) {
                         // size_t xticks = 4;
                         float xspacing = x_range / (float)(xticks);
                         float xoffset = xspacing / 2.0f;
-                        float ystep = graph_bounds.y / graphs[i].limit;
+                        //float ystep = graph_bounds.y / graphs[i].limit;
                         for (size_t t = 0; t < xticks; t++) {
                             nk_chart_draw_line(ctx, graph_bounds, min_ts, max_ts, min_ts + (xspacing * t) + xoffset,
                                                10.0f, 2.0f, nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_BOTTOM);
@@ -1740,8 +1782,8 @@ int main(int argc, char *argv[]) {
                                        ctx->style.font);
 
                         // handle some user interfacing
-                        nk_flags ret;
-                        size_t hover_point;
+                        //nk_flags ret;
+                        //size_t hover_point;
                         if (!(ctx->current->layout->flags & NK_WINDOW_ROM)) {
                             // check if we're in bounds of a point
                             /*

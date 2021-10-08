@@ -7,7 +7,9 @@
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <format>
+//#include <format>
+#include <fmt/core.h>
+#include <fmt/format.h>
 #include <array>
 
 class Serial
@@ -185,7 +187,7 @@ public:
 		std::string str;
 		str.reserve(512);
 
-		std::format_to(std::back_inserter(str), std::string_view{ "COM{}" }, portIndex);
+		fmt::format_to(std::back_inserter(str), std::string_view{ "COM{}" }, portIndex);
 		DWORD test = QueryDosDevice(str.c_str(), lpTargetPath, 5000);
 
 		if (test != 0) {
@@ -230,7 +232,7 @@ public:
 		for (int i = 0; i < 255; i++) // checking ports from COM0 to COM255
 		{
 			//std::string str = "COM" + std::to_string(i); // converting to COM0, COM1, COM2
-			std::format_to(std::back_inserter(str), std::string_view{ "COM{}" }, i);
+			fmt::format_to(std::back_inserter(str), std::string_view{ "COM{}" }, i);
 			DWORD test = QueryDosDevice(str.c_str(), lpTargetPath, 5000);
 
 			// Test the return value and error if any
@@ -249,7 +251,7 @@ public:
 		for (int i = 0; i < 255; i++) // checking ports from COM0 to COM255
 		{
 			//std::string str = "COM" + std::to_string(i); // converting to COM0, COM1, COM2
-			std::format_to(std::back_inserter(str), std::string_view{ "COM{}" }, i);
+			fmt::format_to(std::back_inserter(str), std::string_view{ "COM{}" }, i);
 			DWORD test = QueryDosDevice(str.c_str(), lpTargetPath, 5000);
 
 			// Test the return value and error if any
