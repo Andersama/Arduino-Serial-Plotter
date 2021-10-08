@@ -3,6 +3,7 @@
 #pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")
 
 #include "ArduinoSerialPlotter.h"
+#include "real_vector.h"
 
 #include "SerialClass.h" // Library described above
 #include <charconv>
@@ -228,6 +229,127 @@ std::string example_json = R"raw({"t": 5649,
                                
                   )raw";
 
+std::string mangled_example_json = R"raw(        {
+          "t": "Temp Diff",
+          "xvy": 0,
+          "pd": 60,
+          "sz": 4,
+          "l": [
+                "dFarenheit",
+                "sum",
+                "Low",
+                "High"
+          ],
+          "c": [
+                "green",
+                "orange",
+                "cyan",
+                "yellow"
+          ],
+          "d": [
+                0,
+                0,
+                0.5,
+                10
+          ]
+        },
+        {
+          "t": "Power",
+          "xvy": 0,
+          "pd": 60,
+          "sz": 3,
+          "l": [
+                "watts (est. ligth)",
+                "watts (1.9~gpm)",
+                "watts (1gpm)"
+          ],
+          "c": [
+                "green",
+                "orange",
+                "cyan"
+          ],
+          "d": [
+                181.78063964,
+                114.88922882,
+                59.35943603
+          ]
+        }
+  ]
+}   !@#$%^&*()`;'?><.0123456789some_errant_data   {"t": 5649,
+  "ng": 5,
+  "lu": 4086,
+  "g": [
+        {
+          "t": "Temps",
+          "xvy": 0,
+          "pd": 60,
+          "sz": 3,
+          "l": [
+                "Low Temp",
+                "High Temp",
+                "Smooth Avg"
+          ],
+          "c": [
+                "green",
+                "orange",
+                "cyan"
+          ],
+          "d": [
+                80.48750305,
+                80.82499694,
+                80.65625
+          ]
+        },
+        {
+          "t": "Pump Status",
+          "xvy": 0,
+          "pd": 60,
+          "sz": 3,
+          "l": [
+                "Pump",
+                "Thermal",
+                "Light"
+          ],
+          "c": [
+                "green",
+                "orange",
+                "cyan"
+          ],
+          "d": [
+                0,
+                0,
+                0
+          ]
+        },
+        {
+          "t": "Lux",
+          "xvy": 0,
+          "pd": 60,
+          "sz": 4,
+          "l": [
+                "Value",
+                "Smooth",
+                "Low",
+                "High"
+          ],
+          "c": [
+                "green",
+                "orange",
+                "cyan",
+                "yellow"
+          ],
+          "d": [
+                2274.62939453,
+                2277.45947265,
+                4050,
+                4500
+          ]
+        },
+                      
+                              
+                               
+                  )raw";
+
 static void error_callback(int e, const char *d) { printf("Error %d: %s\n", e, d); }
 
 std::string cout_buffer;
@@ -244,12 +366,11 @@ template <typename... Args> void format_out(Args &&...args) {
 }
 
 struct graph_t {
-    std::vector<std::vector<struct nk_vec2>> values;
+    real::vector<real::vector<struct nk_vec2>> values;
     // x (evens), y (odds)
-    std::vector<float> points;
-    // std::vector<std::vector<float>> points;
-    std::vector<std::string> labels;
-    std::vector<nk_color> colors;
+    real::vector<float> points;
+    real::vector<std::string> labels;
+    real::vector<nk_color> colors;
 
     smooth_data<float> upper_value;
     smooth_data<float> lower_value;
@@ -288,7 +409,7 @@ std::ostream &operator<<(std::ostream &os, const struct nk_color &rgba) {
 }
 
 template<typename T>
-std::ostream &operator<<(std::ostream &os, const std::vector<T> &vec) {
+std::ostream &operator<<(std::ostream &os, const real::vector<T> &vec) {
     os << '[';
     for (size_t i = 0; i < vec.size(); i++) {
         if (i)
@@ -298,6 +419,8 @@ std::ostream &operator<<(std::ostream &os, const std::vector<T> &vec) {
     os << ']';
 }
 */
+
+template <typename T> struct is_container<real::vector<T>> : std::true_type {};
 
 std::ostream &operator<<(std::ostream &os, const struct nk_color &rgba) {
     os << "{\"r\":";
@@ -325,9 +448,7 @@ std::ostream &operator<<(std::ostream &os, const struct nk_vec2 &vec) {
     return os;
 }
 
-template <>
-struct fmt::formatter<struct nk_vec2, char> :
-    fmt::formatter<std::string_view> {
+template <> struct fmt::formatter<struct nk_vec2, char> : fmt::formatter<std::string_view> {
     constexpr auto parse(format_parse_context &ctx) -> decltype(ctx.begin()) {
         auto it = ctx.begin();
         return it;
@@ -473,13 +594,13 @@ template <> struct fmt::formatter<nk_color> : fmt::formatter<std::string_view> {
         return format_to(context.out(), "{{{},{},{},{}}}", state.r, state.g, state.b, state.a);
     }
 };
-template <typename T, typename Alloc> struct fmt::formatter<std::vector<T, Alloc>> : fmt::formatter<string_view> {
+template <typename T, typename Alloc> struct fmt::formatter<real::vector<T, Alloc>> : fmt::formatter<string_view> {
     constexpr auto parse(format_parse_context &ctx) -> decltype(ctx.begin()) {
         auto it = ctx.begin();
         return it;
     }
 
-    template <typename Context> auto format(const std::vector<T> &state, Context &context) {
+    template <typename Context> auto format(const real::vector<T> &state, Context &context) {
         auto ret = format_to(context.out(), "[");
         for (size_t i = 0; i < state.size(); i++) {
             ret = format_to(ret, "{}{}", (i ? "," : ""), state[i]);
@@ -501,7 +622,7 @@ struct std::formatter<struct nk_vec2> : std::formatter<std::string_view> {
     }
 }
 */
-template <typename T> std::string format_array(std::vector<T> &vec) {
+template <typename T> std::string format_array(real::vector<T> &vec) {
     std::string out;
     auto out_it = std::back_inserter(out);
 
@@ -514,7 +635,7 @@ template <typename T> std::string format_array(std::vector<T> &vec) {
     return out;
 }
 
-template <typename T> std::string format_array(std::string &out, std::vector<T> &vec) {
+template <typename T> std::string format_array(std::string &out, real::vector<T> &vec) {
     auto out_it = std::back_inserter(out);
 
     fmt::format_to(out_it, "[");
@@ -526,7 +647,7 @@ template <typename T> std::string format_array(std::string &out, std::vector<T> 
     return out;
 }
 
-std::string graphs_to_string(std::vector<graph_t> &graphs) {
+std::string graphs_to_string(real::vector<graph_t> &graphs) {
     std::string out;
     auto out_it = std::back_inserter(out);
     fmt::format_to(out_it, "[{}", "\n");
@@ -555,8 +676,8 @@ size_t get_lsb_set(unsigned int v) noexcept {
     return r;
 }
 
- void nk_plot_multi(struct nk_context *ctx, enum nk_chart_type type, const float **values, int count, int offset,
-                          int slots) {
+void nk_plot_multi(struct nk_context *ctx, enum nk_chart_type type, const float **values, int count, int offset,
+                   int slots) {
     int i = 0;
     int j = 0;
     float min_value;
@@ -604,9 +725,7 @@ nk_flags nk_chart_draw_yticks(struct nk_context *ctx, struct nk_window *win, str
     range = g->slots[0].max - g->slots[0].min;
     // ratio = (value - g->slots[slot].min) / range;
 
-    float half_step = step / 2.0f;
-
-    float ytick_step = step * 0.25f;
+    float half_step = step * 0.5f;
 
     float h = g->h;
 
@@ -792,267 +911,195 @@ nk_flags nk_chart_draw_value(struct nk_context *ctx, struct nk_rect chart_bounds
 }
 std::string stream_buffer;
 // returns the number of graphs to draw
-size_t handle_json(ondemand::parser &parser, struct nk_context *ctx, std::vector<graph_t> &graphs, const char *ptr,
-                   uint32_t read_count,
-                   uint32_t alloc_width) {
+size_t handle_json(ondemand::parser &parser, struct nk_context *ctx, real::vector<graph_t> &graphs, const char *ptr,
+                   uint32_t read_count) {
     if (read_count) {
-        std::string_view v{ptr, (size_t)read_count};
-        // std::cout << v << '\n';
-        //ondemand::parser parser;
-        ondemand::document graph_data;
-        // padded_string json(ptr, (size_t)read_count);
-        bool good_utf8 = simdjson::validate_utf8(ptr, read_count);
-        auto semi_colon = std::find(ptr, ptr + read_count, '{');
+        // make room for simdjson's scratchbuffer and the incoming data
+        if (stream_buffer.capacity() < (stream_buffer.size() + read_count + (SIMDJSON_PADDING + 1)))
+            stream_buffer.reserve(stream_buffer.size() + read_count + (SIMDJSON_PADDING + 1));
+        // append the data in case we had incomplete data before.
+        stream_buffer.append(ptr, read_count);
+        // wait for buffer to be a decent size
+        if (stream_buffer.size() < 512)
+            return false;
+        // validate buffer is utf8 once
+        if (!simdjson::validate_utf8(stream_buffer.data(), stream_buffer.size()))
+            return false;
+        size_t g = 0;
+        do {
+            ondemand::document graph_data;
 
-        size_t dist = semi_colon - ptr;
-        padded_string_view json(semi_colon, read_count - dist, alloc_width - dist);
+            auto lbrace = std::find(stream_buffer.data(), stream_buffer.data() + stream_buffer.size(), '{');
 
-        auto error = parser.iterate(json).get(graph_data);
-        if (good_utf8 && !error) {
-            // bool result = true;
-            size_t g = 0;
-            try {
-                // get the view of the json object
-                // this effectively validates that we have a complete json object (no errors) in our buffer
+            size_t dist = lbrace - stream_buffer.data();
+
+            padded_string_view json(stream_buffer.data() + dist, stream_buffer.size() - dist,
+                                    stream_buffer.capacity() - dist);
+            auto error = parser.iterate(json).get(graph_data);
+
+            if (!error) {
+                // bool result = true;
                 std::string_view v;
-                auto error = simdjson::to_json_string(graph_data).get(v);
-                if (error) {
-                    return false;
-                }
-                // now we extract the data we need
-                size_t ts;
-                auto err = graph_data["t"].get(ts);
-                if (err) {
-                    // could not find timestamp field
-                    return false;
-                } else {
-                    ondemand::array graphs_array;
-                    auto graphs_err = graph_data["g"].get_array().get(graphs_array);
+                try {
+                    // get the view of the json object
+                    // this effectively validates that we have a complete json object (no errors) in our buffer
+                    auto error = simdjson::to_json_string(graph_data).get(v);
+                    if (error == simdjson::INCOMPLETE_ARRAY_OR_OBJECT) {
+                        // wait for object to complete in a another call
+                        return false;
+                    } else if (error != simdjson::SUCCESS) {
+                        stream_buffer.erase(stream_buffer.begin());
+                    }
+                    // now we extract the data we need
+                    size_t ts;
+                    auto err = graph_data["t"].get(ts);
+                    if (err) {
+                        // could not find timestamp field
+                        // erase the object we read from the stream
+                        const char *start_ptr = v.data();
+                        size_t erase_size = (v.data() + v.size()) - stream_buffer.data();
+                        stream_buffer.erase(size_t{0}, erase_size);
+                        const char *new_start = stream_buffer.data();
 
-                    if (graphs_err) {
-                        // could not find the g field (graphs)
                         return false;
                     } else {
-                        for (auto graph : graphs_array) {
-                            // add graph to keep track of
-                            if (g >= graphs.size()) {
-                                graphs.emplace_back();
-                                // graphs[g].values.reserve(128);
-                            };
-                            std::string_view title;
-                            if (auto title_err = graph["t"].get_string().get(title)) {
+                        ondemand::array graphs_array;
+                        auto graphs_err = graph_data["g"].get_array().get(graphs_array);
 
-                            } else {
-                                graphs[g].title = title;
-                            }
+                        if (graphs_err) {
+                            // could not find the g field (graphs)
+                            // erase the object we read from the stream
+                            stream_buffer.erase(size_t{0}, (v.data() + v.size()) - stream_buffer.data());
+                            return false;
+                        } else {
+                            for (auto graph : graphs_array) {
+                                // add graph to keep track of
+                                if (g >= graphs.size()) {
+                                    graphs.emplace_back();
+                                    // graphs[g].values.reserve(128);
+                                };
+                                std::string_view title;
+                                if (auto title_err = graph["t"].get_string().get(title)) {
 
-                            ondemand::array labels_array;
-                            if (auto labels_err = graph["l"].get_array().get(labels_array)) {
+                                } else {
+                                    graphs[g].title = title;
+                                }
 
-                            } else {
-                                size_t count = 0;
-                                for (auto label : labels_array) {
-                                    if (count >= graphs[g].values.size()) {
-                                        graphs[g].values.emplace_back();
-                                        graphs[g].values[count].reserve(graphs[g].limit);
-                                        graphs[g].labels.emplace_back("");
-                                        graphs[g].colors.emplace_back(ctx->style.chart.color);
+                                ondemand::array labels_array;
+                                if (auto labels_err = graph["l"].get_array().get(labels_array)) {
+
+                                } else {
+                                    size_t count = 0;
+                                    for (auto label : labels_array) {
+                                        if (count >= graphs[g].values.size()) {
+                                            graphs[g].values.emplace_back();
+                                            graphs[g].values[count].reserve(graphs[g].limit);
+                                            graphs[g].labels.emplace_back("");
+                                            graphs[g].colors.emplace_back(ctx->style.chart.color);
+                                        }
+
+                                        auto v = label.get_string();
+                                        auto vw = v.value();
+                                        graphs[g].labels[count] = vw;
+                                        graphs[g].colors[count] = get_color(vw);
+
+                                        count++;
                                     }
+                                }
+                                // if we have a color for the index it overrides the hashed one
+                                ondemand::array colors_array;
+                                if (auto color_err = graph["c"].get_array().get(colors_array)) {
 
-                                    auto v = label.get_string();
-                                    auto vw = v.value();
-                                    graphs[g].labels[count] = vw;
-                                    graphs[g].colors[count] = get_color(vw);
+                                } else {
+                                    size_t count = 0;
+                                    for (auto color : colors_array) {
+                                        if (count >= graphs[g].values.size()) {
+                                            graphs[g].values.emplace_back();
+                                            graphs[g].values[count].reserve(graphs[g].limit);
+                                            graphs[g].labels.emplace_back("");
+                                            graphs[g].colors.emplace_back(ctx->style.chart.color);
+                                        }
 
-                                    count++;
+                                        auto v = color.get_string();
+                                        auto vw = v.value();
+                                        graphs[g].colors[count] = get_color(vw);
+
+                                        count++;
+                                    }
+                                }
+
+                                size_t limit = 60;
+                                if (auto pd_err = graph["pd"].get(limit)) {
+                                    // err
+                                } else {
+                                    // clamp to at least 1 data point
+                                    graphs[g].limit = limit > 0 ? limit : 1;
+                                }
+
+                                float mn = std::numeric_limits<float>::max();
+                                float mx = std::numeric_limits<float>::min();
+                                uint32_t count = 0;
+                                float flt_ts = ts;
+
+                                ondemand::array data_points;
+                                if (auto d_err = graph["d"].get_array().get(data_points)) {
+                                    return false;
+                                } else {
+                                    // go through data points;
+                                    for (auto value : data_points) {
+                                        if (count >= graphs[g].values.size()) {
+                                            graphs[g].values.emplace_back();
+                                            graphs[g].values[count].reserve(graphs[g].limit);
+                                            graphs[g].labels.emplace_back("");
+                                            graphs[g].colors.emplace_back(ctx->style.chart.color);
+                                        }
+
+                                        struct nk_vec2 point;
+                                        point.x = flt_ts;
+                                        point.y = (float)(double)value;
+                                        graphs[g].values[count].emplace_back(point);
+                                        //
+                                        if (graphs[g].values[count].size() > graphs[g].limit) {
+                                            graphs[g].values[count].erase(graphs[g].values[count].begin());
+                                        }
+
+                                        count++;
+                                    }
+                                    graphs[g].slots = count;
+                                    g++;
                                 }
                             }
-                            // if we have a color for the index it overrides the hashed one
-                            ondemand::array colors_array;
-                            if (auto color_err = graph["c"].get_array().get(colors_array)) {
-
-                            } else {
-                                size_t count = 0;
-                                for (auto color : colors_array) {
-                                    if (count >= graphs[g].values.size()) {
-                                        graphs[g].values.emplace_back();
-                                        graphs[g].values[count].reserve(graphs[g].limit);
-                                        graphs[g].labels.emplace_back("");
-                                        graphs[g].colors.emplace_back(ctx->style.chart.color);
-                                    }
-
-                                    auto v = color.get_string();
-                                    auto vw = v.value();
-                                    graphs[g].colors[count] = get_color(vw);
-
-                                    count++;
-                                }
+                            // send the object out to console, make room from the start
+                            if (v.size() > (cout_buffer.size() - cout_buffer.capacity())) {
+                                cout_buffer.erase(size_t{0}, v.size());
                             }
-
-                            size_t limit = 60;
-                            if (auto pd_err = graph["pd"].get(limit)) {
-                                // err
-                            } else {
-                                // clamp to at least 1 data point
-                                graphs[g].limit = limit > 0 ? limit : 1;
-                            }
-
-                            float mn = std::numeric_limits<float>::max();
-                            float mx = std::numeric_limits<float>::min();
-                            uint32_t count = 0;
-                            float flt_ts = ts;
-
-                            ondemand::array data_points;
-                            if (auto d_err = graph["d"].get_array().get(data_points)) {
-                                return false;
-                            } else {
-                                // go through data points;
-                                for (auto value : data_points) {
-                                    if (count >= graphs[g].values.size()) {
-                                        graphs[g].values.emplace_back();
-                                        graphs[g].values[count].reserve(graphs[g].limit);
-                                        graphs[g].labels.emplace_back("");
-                                        graphs[g].colors.emplace_back(ctx->style.chart.color);
-                                    }
-                                    //struct nk_vec2{flt_ts, (float)(double)value}
-                                    struct nk_vec2 point;
-                                    point.x = flt_ts;
-                                    point.y = (float)(double)value;
-                                    graphs[g].values[count].emplace_back(point);
-                                    //
-                                    if (graphs[g].values[count].size() > graphs[g].limit) {
-                                        graphs[g].values[count].erase(graphs[g].values[count].begin());
-                                    }
-
-                                    count++;
-                                }
-                                graphs[g].slots = count;
-                                g++;
-                            }
+                            fmt::format_to(std::back_inserter(cout_buffer), "{}", v);
+                            // cout_buffer.append(v);
+                            // erase whatever we just read
+                            stream_buffer.erase(size_t{0}, (v.data() + v.size()) - stream_buffer.data());
                         }
-                        // send the object out to console, make room from the start
-                        if (v.size() > (cout_buffer.size() - cout_buffer.capacity())) {
-                            cout_buffer.erase(size_t{0}, v.size());
-                        }
-                        cout_buffer.append(v);
-                        //fmt::format_to(std::back_inserter(cout_buffer), "")
-                        //format_out("{}", v);
                     }
+                } catch (const std::exception &err) {
+                    cout_buffer.clear();
+                    fmt::format_to(std::back_inserter(cout_buffer), "{}\n\n{}", err.what(), v);
+                    // format_out("{}\n\n", err.what(), v); // shouldn't allocate in a catch block
+                    g = 0;
+                    stream_buffer.erase(stream_buffer.begin());
                 }
-            } catch (const std::exception &err) {
-                cout_buffer.clear();
-                fmt::format_to(std::back_inserter(cout_buffer), "{}\n\n{}", err.what(), v);
-                //format_out("{}\n\n", err.what(), v); // shouldn't allocate in a catch block
-                g = 0;
+
+            } else {
+                stream_buffer.erase(size_t{0}, dist ? dist : size_t{1});
+                // stream_buffer.erase(stream_buffer.begin());
+                return false;
             }
-            return g;
-        } else {
-            return false;
-        }
-        return true;
+        } while (stream_buffer.size() >= 512);
+        return g;
     } else {
         return false;
     }
 }
 
-
-size_t handle_json_stream(ondemand::parser &parser, struct nk_context *ctx, std::vector<graph_t> &graphs, const char *ptr,
-                          uint32_t read_count) {
-
-    // make room for simdjson's scratchbuffer and the incoming data
-    stream_buffer.reserve(stream_buffer.size() + read_count + (SIMDJSON_PADDING+1));
-    // append the data in case we had incomplete data before.
-    stream_buffer.append(ptr, read_count);
-
-    ondemand::document_stream stream;
-
-    const char *stream_ptr = stream_buffer.data();
-    auto left_brace = std::find(stream_ptr, stream_ptr + stream_buffer.size(), '{');
-    size_t dist = left_brace - stream_ptr;
-
-    auto error = parser.iterate_many(stream_ptr, stream_buffer.size()-dist, stream_buffer.capacity()-dist).get(stream);
-    if (error) {
-        // some serious error occurred, bump forward by 1
-        stream_buffer.erase(size_t{0}, size_t{1});
-        return false;
-    }
-
-    size_t count{0};
-    size_t good_diff{0};
-    size_t graphs_to_display{0};
-
-    for (auto i = stream.begin(); i != stream.end(); ++i) {
-        auto doc = *i;
-        //ondemand::document_reference doc;
-        //auto err = (*i).get(doc);
-        auto err = i.error();
-        if (!err) {
-            std::string_view json_object_view = i.source();
-            size_t g = handle_json(parser, ctx, graphs, json_object_view.data(), json_object_view.size(),
-                                   (stream_buffer.data()+stream_buffer.size())-json_object_view.data());//json_object_view.size() + SIMDJSON_PADDING
-            graphs_to_display = (g > 0 && g != graphs_to_display) ? g : graphs_to_display;
-            good_diff = ((json_object_view.data() + json_object_view.size()) - stream_buffer.data());
-            count++;
-            continue;
-        } 
-        //check on the errors
-        if (err == simdjson::CAPACITY) {
-            break;
-        } else if (err == simdjson::UNINITIALIZED) {
-            // hard error, simdjson did not think any of this was json
-            stream_buffer.clear();
-            return graphs_to_display;
-            //break;//parsed to some end point?
-        } else {
-            //std::cout << "got broken document at " << i.current_index() << std::endl;
-            size_t idx = i.current_index();
-            std::string_view error_view = error_message(err);
-            size_t error_length = std::string_view{"got broken document at {}\n{}:{}\n{}"}.size() + 8 + 8 +
-                                  error_view.size() + stream_buffer.size();
-
-            if (error_length > (cout_buffer.size() - cout_buffer.capacity())) {
-                cout_buffer.erase(size_t{0}, error_length);
-            }
-            /*
-            format_out("got broken document at {}\n{}:{}\n{}", idx, 
-                (size_t)i.error(), error_view,
-                       std::string_view{stream_buffer.data() + idx, stream_buffer.size()-idx});
-                       */
-            fmt::format_to(std::back_inserter(cout_buffer), "broken document at {}\n{}:{}\n{}", idx, (size_t)i.error(),
-                           error_view, std::string_view{stream_buffer.data() + idx, stream_buffer.size() - idx});
-            stream_buffer.clear();
-            return graphs_to_display;
-        }
-    }
-    size_t truncated = stream.truncated_bytes();
-    size_t remove_bytes = good_diff ? good_diff : (stream_buffer.size() - truncated);
-    stream_buffer.erase(0, remove_bytes);
-    /*
-    // remove everything that wasn't truncated
-    size_t truncated = stream.truncated_bytes();
-    stream_buffer.erase(stream_buffer.begin(), stream_buffer.begin() + (stream_buffer.size() - truncated));
-    */
-
-    return graphs_to_display;
-}
-
-struct polyline_data {
-    struct nk_vec2 *points;
-    struct nk_vec2 *points_end;
-    nk_color color;
-    float thickness;
-};
-/*
-void render_polyline(void *canvas, short x, short y, unsigned short w, unsigned short h, nk_handle callback_data) {
-    struct nk_draw_list *list = (struct nk_draw_list *)canvas;
-    polyline_data *data = (polyline_data *)callback_data.ptr;
-    nk_draw_list_stroke_poly_line(list, data->points, (data->points_end - data->points), data->color, NK_STROKE_OPEN,
-data->thickness, list->config.line_AA); nk_draw_list_path_clear(list);
-}
-*/
-// application reads from the specified serial port and reports the collected
-// data
-void clear_data(std::vector<graph_t> &graphs) {
+void clear_data(real::vector<graph_t> &graphs) {
     for (size_t i = 0; i < graphs.size(); i++) {
         for (size_t s = 0; s < graphs[s].values.size(); s++)
             graphs[i].values[s].clear();
@@ -1065,6 +1112,11 @@ void clear_data(std::vector<graph_t> &graphs) {
     }
 }
 
+void nk_scroll(struct nk_context *ctx, float v) {
+    struct nk_window *win = ctx->current;
+    win->edit.scrollbar.y = v;
+}
+
 int main(int argc, char *argv[]) {
     pcg32_random_t rng;
     rng.inc = (ptrdiff_t)&rng;
@@ -1072,27 +1124,10 @@ int main(int argc, char *argv[]) {
     rng.state = std::chrono::steady_clock::now().time_since_epoch().count();
     pcg32_random_r(&rng);
 
-    //bool valid_input = simdjson::validate_utf8(example_json);
-    //std::cout << valid_input << '\n';
-    //auto json = R"([1,2,3]  {"1":1,"2":3,"4":4} {"key":"intentionally unclosed string  )"_padded;
-    
     simdjson::ondemand::parser parser;
-    simdjson::ondemand::document_stream stream;
-    auto error = parser.iterate_many(example_json, example_json.size() - SIMDJSON_PADDING).get(stream);
-    if (error) {
-        std::cerr << error << std::endl;
-        return 1;
-    }
-    for (auto i = stream.begin(); i != stream.end(); ++i) {
-        std::string_view v = i.source();
-        std::cout << v << std::endl;
-    }
-    size_t t = stream.truncated_bytes();
-    std::cout << t << " bytes " << std::endl; // returns 39 bytes 
-    
-    
+
     // pcg32_random_r
-    std::vector<graph_t> graphs;
+    real::vector<graph_t> graphs;
     graphs.reserve(32);
 
     cout_buffer.reserve(1024);
@@ -1107,8 +1142,10 @@ int main(int argc, char *argv[]) {
 
     uint32_t window_width = 1920;
     uint32_t window_height = 1080;
-    int xticks = 4;
-    int yticks = 4;
+
+    int graph_width = 500;
+    int graph_height = 500;
+
     /* GLFW */
     glfwSetErrorCallback(error_callback);
     if (!glfwInit()) {
@@ -1157,6 +1194,9 @@ int main(int argc, char *argv[]) {
         /*nk_style_set_font(ctx, &droid->handle);*/
     }
 
+    int xticks = 4;
+    int yticks = 4;
+
     size_t mx_width = 1024;
     size_t alloc_width = 1024 + SIMDJSON_PADDING;
     char *ptr = (char *)calloc(alloc_width, 1);
@@ -1183,6 +1223,7 @@ int main(int argc, char *argv[]) {
         if (SerialPorts[i]) {
             size_t port_num = get_lsb_set(SerialPorts[i]);
             auto result = std::to_chars(txtedit, (txtedit + txtedit_sz), port_num);
+            *result.ptr = 0;
             txtedit_len[0] = result.ptr - txtedit;
             break;
         }
@@ -1206,7 +1247,6 @@ int main(int argc, char *argv[]) {
     int data_auto_scroll = true;
     int example_json_mode = false;
 
-    nk_colorf picker_color;
     uint32_t baud_rate = 115200;
 
     size_t graphs_to_display = 0;
@@ -1222,7 +1262,7 @@ int main(int argc, char *argv[]) {
     const size_t ms_per_ns = 1'000'000;
 
     size_t baud_delay = ((full_buffer * ns_per_second) / bytes_per_second) + (2 * ms_per_ns);
-    //size_t delay = 1'000'000'000;
+    // size_t delay = 1'000'000'000;
     size_t frame_rate_delay = 33'000'000;
     size_t delay = 33'000'000;
     delay = NK_MIN(baud_delay, frame_rate_delay);
@@ -1268,7 +1308,7 @@ int main(int argc, char *argv[]) {
                         fmt::format_to(std::back_inserter(comport_path), std::string_view{"\\\\.\\COM{}"},
                                        std::string_view{txtedit, (size_t)txtedit_len[0]});
 
-                        //print_out(std::string_view{"attempting to connect to {}...\n"}, comport_path);
+                        // print_out(std::string_view{"attempting to connect to {}...\n"}, comport_path);
                         fmt::format_to(std::back_inserter(cout_buffer), "attempting to connect to {}...", comport_path);
 
                         uint32_t port_num = 0;
@@ -1276,9 +1316,10 @@ int main(int argc, char *argv[]) {
                         int result = SerialPort.Connect(port_num, false, baud_rate);
                         if (result == 0)
                             result = SerialPort.Connect(comport_path.data(), false, baud_rate);
-                        //print_out(std::string_view{"{}"}, result != 0 ? std::string_view{"success!"} : std::string_view{"failed!"});
+                        // print_out(std::string_view{"{}"}, result != 0 ? std::string_view{"success!"} :
+                        // std::string_view{"failed!"});
                         fmt::format_to(std::back_inserter(cout_buffer), std::string_view{"{}"},
-                                  result != 0 ? std::string_view{"success!"} : std::string_view{"failed!"});
+                                       result != 0 ? std::string_view{"success!"} : std::string_view{"failed!"});
 
                         if (result) {
                             const size_t bytes_per_second = baud_rate / 8;
@@ -1295,32 +1336,40 @@ int main(int argc, char *argv[]) {
                     }
                 }
 
-                nk_layout_row_dynamic(ctx, 30, 2);
-                nk_label(ctx, "Marks (x-axis):", NK_TEXT_LEFT);
-                nk_slider_int(ctx, 4, &xticks, 10, 1);
-                nk_label(ctx, "Marks (y-axis):", NK_TEXT_LEFT);
-                nk_slider_int(ctx, 4, &yticks, 10, 1);
-                // nk_label(ctx, "Zoom: ", NK_TEXT_LEFT);
-                // nk_slider_float(ctx, 0.0f, &zoom_factor, 1.5f, 0.001f);
-                nk_property_float(ctx, "Zoom", 0.0, &zoom_factor, 1.5f, 0.01f, 0.01f);
-                nk_property_float(ctx, "Rate", 0.0, &zoom_rate, 1.0, 0.0001f, 0.0001f);
-                nk_checkbox_label(ctx, "Demo", &demo_mode);
-                nk_checkbox_label(ctx, "Random/Json", &example_json_mode);
+                if (nk_tree_push_hashed(ctx, NK_TREE_TAB, "Gui", nk_collapse_states::NK_MINIMIZED, "_", 1, __LINE__)) {
+                    nk_layout_row_dynamic(ctx, 30, 2);
+                    nk_label(ctx, "Marks (x-axis):", NK_TEXT_LEFT);
+                    nk_slider_int(ctx, 4, &xticks, 10, 1);
+                    nk_label(ctx, "Marks (y-axis):", NK_TEXT_LEFT);
+                    nk_slider_int(ctx, 4, &yticks, 10, 1);
+
+                    nk_property_int(ctx, "Width", 100, &graph_width, 0xffff, 1, 1.0f);
+                    nk_property_int(ctx, "Height", 100, &graph_height, 0xffff, 1, 1.0f);
+                    // nk_label(ctx, "Zoom: ", NK_TEXT_LEFT);
+                    // nk_slider_float(ctx, 0.0f, &zoom_factor, 1.5f, 0.001f);
+                    nk_property_float(ctx, "Zoom", 0.0, &zoom_factor, 1.5f, 0.01f, 0.01f);
+                    nk_property_float(ctx, "Rate", 0.0, &zoom_rate, 1.0, 0.0001f, 0.0001f);
+                    nk_checkbox_label(ctx, "Demo", &demo_mode);
+                    nk_checkbox_label(ctx, "Random/Json", &example_json_mode);
+                }
 
                 if (nk_tree_push_hashed(ctx, NK_TREE_TAB, "Data", nk_collapse_states::NK_MINIMIZED, "_", 1, __LINE__)) {
                     nk_layout_row_dynamic(ctx, 30, 2);
                     nk_label(ctx, "Data:", NK_TEXT_LEFT);
-                    // nk_layout_row_static(ctx, 180, 278, 1);
-                    if (nk_button_label(ctx, "Clear")) {
-                        cout_buffer.clear();
-                    }
                     nk_checkbox_label(ctx, "Autoscroll", &data_auto_scroll);
 
-                    int len = cout_buffer.size();
+                    // int len = cout_buffer.size();
+                    int len = 2048 < cout_buffer.size() ? 2048 : cout_buffer.size();
                     nk_layout_row_dynamic(ctx, 278, 1);
                     //(NK_EDIT_MULTILINE | NK_EDIT_ALLOW_TAB | NK_EDIT_CLIPBOARD | NK_EDIT_READ_ONLY)
-                    nk_edit_string(ctx, (NK_EDIT_BOX), cout_buffer.data(), &len, cout_buffer.capacity(),
-                                   nk_filter_default);
+                    // auto scroll by viewing the tail end of the data
+                    if (data_auto_scroll) {
+                        nk_edit_focus(ctx, 0);
+                        //make sure we're absolutely going to scroll to the end
+                        nk_scroll(ctx, (&ctx->style)->font->height * len);
+                    }
+                    nk_edit_string(ctx, (NK_EDIT_BOX),
+                                   (cout_buffer.data() + cout_buffer.size()) - len, &len, len, nk_filter_default);
                     /*
                     edit->scrollbar.y = nk_do_scrollbarv(&ws, out, scroll, 0, scroll_offset, scroll_target, scroll_step,
                                                          scroll_inc, &style->scrollbar, in, font);
@@ -1337,8 +1386,7 @@ int main(int argc, char *argv[]) {
                     if (nk_button_label(ctx, "Send")) {
                         // make sure we have padding for simdjson
                         edit_string.reserve(edit_string.size() + (2 * SIMDJSON_PADDING));
-                        size_t g =
-                            handle_json(parser, ctx, graphs, edit_string.data(), edit_string.size(), edit_string.capacity());
+                        size_t g = handle_json(parser, ctx, graphs, edit_string.data(), edit_string.size());
 
                         graphs_to_display = (g > 0 && g != graphs_to_display) ? g : graphs_to_display;
 
@@ -1397,30 +1445,26 @@ int main(int argc, char *argv[]) {
 
             /* COM GUI */
             bg.r = 0.10f, bg.g = 0.18f, bg.b = 0.24f, bg.a = 1.0f;
-            size_t current_timestamp = std::chrono::steady_clock::now().time_since_epoch().count();            
+            size_t current_timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
 
             // 1'000'000'000 ns => 1 second
             size_t timestamp_diff = (current_timestamp - last_timestamp);
-            if (SerialPort.IsConnected() && (timestamp_diff > delay)) { // attempt to graph graphs
-                                                                                              // from incoming
-                                                                                              // data
+            if (SerialPort.IsConnected() && (timestamp_diff > delay)) {
                 /* Serial Stuff */
                 last_timestamp = current_timestamp;
                 read_count = SerialPort.ReadData(ptr, (mx_width - (2 * SIMDJSON_PADDING)));
                 ptr[read_count] = 0;
 
                 if (read_count) {
-                    size_t g = handle_json_stream(parser, ctx, graphs, ptr, read_count);
-                    last_ok_timestamp = g > 0 ? current_timestamp : last_ok_timestamp;
-                    delay = g > 0 ? timestamp_diff : delay;
-
+                    size_t g = handle_json(parser, ctx, graphs, ptr, read_count);
                     graphs_to_display = (g > 0 && g != graphs_to_display) ? g : graphs_to_display;
                 }
             } else if (demo_mode && example_json_mode) {
-                size_t g = handle_json_stream(parser, ctx, graphs, example_json.data(),
-                                              example_json.size());
+                /* Parsing Json Data */
+                size_t g = handle_json(parser, ctx, graphs, mangled_example_json.data(), mangled_example_json.size());
                 graphs_to_display = (g > 0 && g != graphs_to_display) ? g : graphs_to_display;
                 size_t ts = std::chrono::steady_clock::now().time_since_epoch().count();
+                last_ok_timestamp = current_timestamp;
                 float flt_ts = ts / 1000000.0f;
                 for (size_t i = 0; i < graphs_to_display; i++) {
                     for (size_t s = 0; s < graphs[i].values.size(); s++) {
@@ -1428,6 +1472,8 @@ int main(int argc, char *argv[]) {
                     }
                 }
             } else if (demo_mode) {
+                /* Randomly Generated Data */
+                last_ok_timestamp = current_timestamp;
                 graphs_to_display = 6;
                 for (size_t i = 0; i < graphs_to_display; i++) {
                     if (i >= graphs.size()) {
@@ -1454,6 +1500,7 @@ int main(int argc, char *argv[]) {
                     graphs[i].values.reserve(graphs[i].colors.size());
                     graphs[i].labels.reserve(graphs[i].colors.size());
                     // make sure we have enough graphs for all the colors
+
                     while (graphs[i].values.size() < graphs[i].colors.size()) {
                         graphs[i].values.emplace_back();
                         graphs[i].labels.emplace_back();
@@ -1466,12 +1513,13 @@ int main(int argc, char *argv[]) {
                             fmt::format_to(std::back_inserter(graphs[i].labels[s]), "data #{}", s);
                         }
 
-                        graphs[i].values[s].reserve(graphs[i].limit + 1);
-                        
+                        if (graphs[i].values[s].capacity() < (graphs[i].limit + 1))
+                            graphs[i].values[s].reserve(graphs[i].limit + 1);
+
                         for (size_t l = graphs[i].values[s].size(); l < graphs[i].limit; l++) {
-                            #if __clang__
-                                //graphs[i].values[s].emplace_back();
-                            #else
+#if __clang__
+                            // graphs[i].values[s].emplace_back();
+#else
                             if (graphs[i].values[s].size() < 1)
                                 graphs[i].values[s].emplace_back(0.0f, 0.0f);
                             else
@@ -1479,42 +1527,54 @@ int main(int argc, char *argv[]) {
                                                                  graphs[i].values[s].back().y +
                                                                      ((pcg32_random_r(&rng) % 256) / 1024.0f) -
                                                                      (128 / 1024.0f));
-                            #endif                                         
+#endif
                         }
-                        
                     }
 
-                    size_t ts = std::chrono::steady_clock::now().time_since_epoch().count();
-                    float flt_ts = ts / 1000000.0f;
+                    float flt_ts = current_timestamp / 1000000.0f;
                     for (size_t s = 0; s < graphs[i].values.size(); s++) {
-                        // fill with data point
-                        #if __clang__
+// fill with data point
+                        auto it = graphs[i].values[s].end();
+                        float rnd_value = ((pcg32_random_r(&rng) % 256) / 1024.0f) - (128 / 1024.0f);
+                        struct nk_vec2 &point = graphs[i].values[s].unchecked_emplace_back();
+                        point.y = it->y + rnd_value;
+                        point.x = flt_ts;
+
+                        if (graphs[i].values[s].size() > graphs[i].limit) {
+                            graphs[i].values[s].erase(graphs[i].values[s].begin());
+                        }
+/* //if using std::vector
+#if __clang__
                         struct nk_vec2 &vec = graphs[i].values[s].emplace_back();
                         if (graphs[i].values[s].size()) {
                             vec.x = flt_ts;
-                            vec.y = graphs[i].values[s][graphs[i].values[s].size()-1].y +
+                            vec.y = graphs[i].values[s][graphs[i].values[s].size() - 1].y +
                                     ((pcg32_random_r(&rng) % 256) / 1024.0f) - (128 / 1024.0f);
                         }
                         if (graphs[i].values[s].size() > graphs[i].limit) {
                             graphs[i].values[s].erase(graphs[i].values[s].begin());
                         }
-                        #else
+#else
                         if (graphs[i].values[s].size() < 1)
                             graphs[i].values[s].emplace_back(flt_ts, 0.0f);
-                        graphs[i].values[s].emplace_back(flt_ts,
-                            graphs[i].values[s].back().y + ((pcg32_random_r(&rng) % 256) / 1024.0f) - (128 / 1024.0f));
+                        graphs[i].values[s].emplace_back(flt_ts, graphs[i].values[s].back().y +
+                                                                     ((pcg32_random_r(&rng) % 256) / 1024.0f) -
+                                                                     (128 / 1024.0f));
                         if (graphs[i].values[s].size() > graphs[i].limit) {
                             graphs[i].values[s].erase(graphs[i].values[s].begin());
                         }
-                        #endif
+#endif
+*/
+
                     }
                 }
             }
 
             struct nk_rect window_bounds_2 = nk_window_get_bounds(ctx);
             struct nk_rect content_region = nk_window_get_content_region(ctx);
-            // content_region.h
-            nk_layout_row_dynamic(ctx, 500, (content_region.w / 500));
+
+            //dynamic render to fit graphs
+            nk_layout_row_dynamic(ctx, graph_height, (content_region.w / graph_width));
 
             for (size_t i = 0; i < graphs.size() && i < graphs_to_display; i++) {
                 float min_value;
@@ -1663,7 +1723,8 @@ int main(int argc, char *argv[]) {
                         size_t coordinates = 0;
                         for (size_t s = 0; s < graphs[i].values.size(); s++)
                             coordinates += graphs[i].values[s].size();
-                        graphs[i].points.reserve(coordinates * 2);
+                        if (coordinates > graphs[i].points.capacity())
+                            graphs[i].points.reserve(coordinates * 4);
                         // graphs[i].points.reserve(graphs[i].limit * graphs[i].values.size());
                         float *data = graphs[i].points.data();
 
@@ -1682,8 +1743,8 @@ int main(int argc, char *argv[]) {
 
                         float ylimrange = yupper - ylower;
                         float yspacing = ylimrange / (float)(yticks + 1);
-                        //float yoffset = yspacing / 2.0f;
-                        //float xstep = graph_bounds.w / graphs[i].limit;
+                        // float yoffset = yspacing / 2.0f;
+                        // float xstep = graph_bounds.w / graphs[i].limit;
 
                         for (size_t s = 0; s < graphs[i].values.size() && s < graphs[i].slots; s++) {
                             float *line_data = data + point_idx;
@@ -1757,7 +1818,7 @@ int main(int argc, char *argv[]) {
                         // size_t xticks = 4;
                         float xspacing = x_range / (float)(xticks);
                         float xoffset = xspacing / 2.0f;
-                        //float ystep = graph_bounds.y / graphs[i].limit;
+                        // float ystep = graph_bounds.y / graphs[i].limit;
                         for (size_t t = 0; t < xticks; t++) {
                             nk_chart_draw_line(ctx, graph_bounds, min_ts, max_ts, min_ts + (xspacing * t) + xoffset,
                                                10.0f, 2.0f, nk_color{255, 255, 255, 255}, NK_TEXT_ALIGN_BOTTOM);
@@ -1782,8 +1843,8 @@ int main(int argc, char *argv[]) {
                                        ctx->style.font);
 
                         // handle some user interfacing
-                        //nk_flags ret;
-                        //size_t hover_point;
+                        // nk_flags ret;
+                        // size_t hover_point;
                         if (!(ctx->current->layout->flags & NK_WINDOW_ROM)) {
                             // check if we're in bounds of a point
                             /*
@@ -1889,12 +1950,12 @@ int main(int argc, char *argv[]) {
          * state after rendering the UI. */
         nk_glfw3_render(NK_ANTI_ALIASING_ON);
         glfwSwapBuffers(win);
-        Sleep(16);
+        Sleep(24);
         // Sleep(100);
     }
 
     if (SerialPort.IsConnected())
-        std::cout << "disconnecting...";
+        fmt::print("{}", "disconnecting...");
 
     nk_glfw3_shutdown();
     glfwTerminate();
