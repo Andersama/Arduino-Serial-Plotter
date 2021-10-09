@@ -232,6 +232,7 @@ public:
 		for (int i = 0; i < 255; i++) // checking ports from COM0 to COM255
 		{
 			//std::string str = "COM" + std::to_string(i); // converting to COM0, COM1, COM2
+			str.clear();
 			fmt::format_to(std::back_inserter(str), std::string_view{ "COM{}" }, i);
 			DWORD test = QueryDosDevice(str.c_str(), lpTargetPath, 5000);
 
@@ -251,6 +252,7 @@ public:
 		for (int i = 0; i < 255; i++) // checking ports from COM0 to COM255
 		{
 			//std::string str = "COM" + std::to_string(i); // converting to COM0, COM1, COM2
+			str.clear();
 			fmt::format_to(std::back_inserter(str), std::string_view{ "COM{}" }, i);
 			DWORD test = QueryDosDevice(str.c_str(), lpTargetPath, 5000);
 

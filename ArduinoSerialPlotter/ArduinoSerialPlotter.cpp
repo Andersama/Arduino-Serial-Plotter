@@ -379,293 +379,6 @@ struct graph_t {
     size_t slots = 0;
     std::string title;
 };
-/*
-template <>
-struct std::formatter<graph_t> : std::formatter<std::string_view> {
-    template <typename Context> auto format(const graph_t state, Context &context) {
-        // unreachable
-        return context.out();
-    }
-}
-*/
-/*
-std::ostream &operator<<(std::ostream &os, const struct nk_vec2 &vec) {
-    os << '{';
-    os << vec.x;
-    os << ',';
-    os << vec.y;
-    os << '}';
-}
-std::ostream &operator<<(std::ostream &os, const struct nk_color &rgba) {
-    os << '{';
-    os << rgba.r;
-    os << ',';
-    os << rgba.g;
-    os << ',';
-    os << rgba.b;
-    os << ',';
-    os << rgba.a;
-    os << '}';
-}
-
-template<typename T>
-std::ostream &operator<<(std::ostream &os, const real::vector<T> &vec) {
-    os << '[';
-    for (size_t i = 0; i < vec.size(); i++) {
-        if (i)
-            os << ',';
-        os << vec[i];
-    }
-    os << ']';
-}
-*/
-
-template <typename T> struct is_container<real::vector<T>> : std::true_type {};
-
-std::ostream &operator<<(std::ostream &os, const struct nk_color &rgba) {
-    os << "{\"r\":";
-    os << rgba.r;
-    os << ',';
-    os << "\"g\":";
-    os << rgba.g;
-    os << ',';
-    os << "\"b\":";
-    os << rgba.b;
-    os << ',';
-    os << "\"a\":";
-    os << rgba.a;
-    os << '}';
-    return os;
-}
-
-std::ostream &operator<<(std::ostream &os, const struct nk_vec2 &vec) {
-    os << "{\"x\":";
-    os << vec.x;
-    os << ',';
-    os << "\"y\":";
-    os << vec.y;
-    os << '}';
-    return os;
-}
-
-template <> struct fmt::formatter<struct nk_vec2, char> : fmt::formatter<std::string_view> {
-    constexpr auto parse(format_parse_context &ctx) -> decltype(ctx.begin()) {
-        auto it = ctx.begin();
-        return it;
-    }
-
-    template <typename Context> auto format(const struct nk_vec2 state, Context &context) {
-        return format_to(context.out(), "{{{},{}}}", state.x, state.y);
-    }
-};
-
-template <typename T> int sgn(const T &val) { return (T(0) < val) - (val < T(0)); }
-
-double sanitize(const double d) {
-    if (std::isfinite(d)) {
-        return d;
-    } else {
-        if (std::isinf(d)) {
-            return sgn(d) * std::numeric_limits<double>::max();
-        }
-        return 0.;
-    }
-}
-
-double sanitize(const float f) { return sanitize(static_cast<double>(f)); }
-
-std::string sanitize(std::string const &input) {
-    return utf8_json::json_encode_codepoints(utf8_json::decode_utf8(input));
-}
-// return value as is
-template <typename T> T sanitize(const T &t) { return t; }
-
-template <typename V> std::string json_dump_value(const V &value);
-template <typename T> std::string json_dump_value_or_container(const T &t, std::false_type);
-template <typename T> std::string json_dump_value_or_container(const T &t, std::true_type);
-template <typename T> std::string json_dump_simple_or_associative_container(const T &t, std::false_type);
-template <typename T> std::string json_dump_simple_or_associative_container(const T &t, std::true_type);
-template <typename T> std::string json_dump(const T &t);
-std::string json_dump_value(const std::string &value);
-template <typename C> std::string json_dump_simple_container(const C &container);
-
-// implement type specific serialization
-template <typename V> std::string json_dump_value(const V &value) {
-    std::ostringstream oss;
-    oss << sanitize(value);
-    return oss.str();
-}
-
-// dispatch to correct json_dump method
-template <typename T> std::string json_dump_value_or_container(const T &t, std::false_type) {
-    return json_dump_value(t);
-}
-
-template <typename T> std::string json_dump_value_or_container(const T &t, std::true_type) {
-    return json_dump_simple_or_associative_container(t, typename is_associative_container<T>::type());
-}
-
-template <typename T> std::string json_dump_simple_or_associative_container(const T &t, std::false_type) {
-    return json_dump_simple_container(t);
-}
-
-template <typename T> std::string json_dump_simple_or_associative_container(const T &t, std::true_type) {
-    return json_dump_associative_container(t);
-}
-
-template <typename T> std::string json_dump(const T &t) {
-    // dispatch to actual json_dump method:
-    // * not iterable type json_dumped as simple value
-    // * iterable type
-    //   * with mapped value json_dumped as mapped_container
-    //   * otherwise json_dumped as simple_container
-    return json_dump_value_or_container(t, typename is_container<T>::type());
-}
-
-std::string json_dump_value(const std::string &value) { return "\"" + sanitize(value) + "\""; }
-
-template <typename K, typename V> std::string json_dump_value(const std::pair<const K, V> &pair) {
-    std::ostringstream oss;
-    oss << "[" << json_dump(pair.first) << ", " << json_dump(pair.second) << "]";
-    return oss.str();
-}
-
-template <typename V> std::string json_dump_pair(const std::pair<const std::string, V> &pair) {
-    std::ostringstream oss;
-    oss << json_dump(pair.first) << ": " << json_dump(pair.second);
-    return oss.str();
-}
-
-template <typename C> std::string json_dump_simple_container(const C &container) {
-    std::ostringstream oss;
-    typename C::const_iterator it = container.begin();
-
-    oss << "[" << json_dump(*it);
-    for (++it; it != container.end(); ++it) {
-        oss << ", " << json_dump(*it);
-    }
-    oss << "]";
-
-    return oss.str();
-}
-
-template <typename C> std::string json_dump_simple_container(const C &container, size_t n) {
-    std::ostringstream oss;
-    typename C::const_iterator it = container.begin();
-    size_t count = 0;
-    oss << "[";
-    if (count < n)
-        oss << json_dump(*it);
-    count++;
-
-    for (++it; it != container.end(); ++it) {
-        if (count < n)
-            oss << ", " << json_dump(*it);
-        else
-            break;
-
-        count++;
-    }
-    oss << "]";
-
-    return oss.str();
-}
-
-template <typename M> std::string json_dump_associative_container(const M &map) {
-    std::ostringstream oss;
-    typename M::const_iterator it = map.begin();
-
-    oss << "{" << json_dump_pair(*it);
-    for (++it; it != map.end(); ++it) {
-        oss << ", " << json_dump_pair(*it);
-    }
-    oss << "}";
-
-    return oss.str();
-}
-
-template <> struct fmt::formatter<nk_color> : fmt::formatter<std::string_view> {
-    constexpr auto parse(format_parse_context &ctx) -> decltype(ctx.begin()) {
-        auto it = ctx.begin();
-        return it;
-    }
-
-    template <typename Context> auto format(const nk_color state, Context &context) {
-        return format_to(context.out(), "{{{},{},{},{}}}", state.r, state.g, state.b, state.a);
-    }
-};
-template <typename T, typename Alloc> struct fmt::formatter<real::vector<T, Alloc>> : fmt::formatter<string_view> {
-    constexpr auto parse(format_parse_context &ctx) -> decltype(ctx.begin()) {
-        auto it = ctx.begin();
-        return it;
-    }
-
-    template <typename Context> auto format(const real::vector<T> &state, Context &context) {
-        auto ret = format_to(context.out(), "[");
-        for (size_t i = 0; i < state.size(); i++) {
-            ret = format_to(ret, "{}{}", (i ? "," : ""), state[i]);
-        }
-        return ret = format_to(ret, "]");
-    }
-};
-
-/*
-template <>
-struct std::formatter<struct nk_vec2> : std::formatter<std::string_view> {
-    constexpr auto parse(format_parse_context &ctx) -> decltype(ctx.begin()) {
-        auto it = ctx.begin();
-        return it;
-    }
-
-    template <typename Context> auto format(const struct nk_vec2 state, Context &context) {
-        return format_to(context.out(), "{{{},{}}}", state.x, state.y);
-    }
-}
-*/
-template <typename T> std::string format_array(real::vector<T> &vec) {
-    std::string out;
-    auto out_it = std::back_inserter(out);
-
-    fmt::format_to(out_it, "[");
-    for (size_t i = 0; i < vec.size(); i++) {
-        fmt::format_to(out_it, "{}{}", (i ? "," : ""), vec[i]);
-    }
-    fmt::format_to(out_it, "]");
-
-    return out;
-}
-
-template <typename T> std::string format_array(std::string &out, real::vector<T> &vec) {
-    auto out_it = std::back_inserter(out);
-
-    fmt::format_to(out_it, "[");
-    for (size_t i = 0; i < vec.size(); i++) {
-        fmt::format_to(out_it, "{}{}", (i ? "," : ""), vec[i]);
-    }
-    fmt::format_to(out_it, "]");
-
-    return out;
-}
-
-std::string graphs_to_string(real::vector<graph_t> &graphs) {
-    std::string out;
-    auto out_it = std::back_inserter(out);
-    fmt::format_to(out_it, "[{}", "\n");
-    for (size_t i = 0; i < graphs.size(); i++) {
-        fmt::format_to(out_it, "{}", i ? ",{" : "{");
-        fmt::format_to(out_it, "\n\t't':\"{}\"", sanitize(graphs[i].title));
-
-        fmt::format_to(out_it, "\n\t'l':{},", json_dump_simple_container(graphs[i].labels, graphs[i].limit));
-
-        fmt::format_to(out_it, "\n\t'c':{},", json_dump_simple_container(graphs[i].colors), graphs[i].limit);
-
-        fmt::format_to(out_it, "\n\t'd':{}", json_dump_simple_container(graphs[i].values, graphs[i].limit));
-        fmt::format_to(out_it, "{}", '}');
-    }
-    fmt::format_to(out_it, "\n]");
-
-    return out;
-}
 
 size_t get_lsb_set(unsigned int v) noexcept {
     // find the number of trailing zeros in 32-bit v
@@ -1146,6 +859,7 @@ int main(int argc, char *argv[]) {
 
     int graph_width = 500;
     int graph_height = 500;
+    int antialiasing = true;
 
     /* GLFW */
     glfwSetErrorCallback(error_callback);
@@ -1354,6 +1068,8 @@ int main(int argc, char *argv[]) {
                     nk_property_float(ctx, "Rate", 0.0, &zoom_rate, 1.0, 0.0001f, 0.0001f);
                     nk_checkbox_label(ctx, "Demo", &demo_mode);
                     nk_checkbox_label(ctx, "Random/Json", &example_json_mode);
+                    nk_checkbox_label(ctx, "Anti-Aliasing", &antialiasing);
+                    nk_tree_pop(ctx);
                 }
 
                 if (nk_tree_push_hashed(ctx, NK_TREE_TAB, "Data", nk_collapse_states::NK_MINIMIZED, "_", 1, __LINE__)) {
@@ -1616,68 +1332,7 @@ int main(int argc, char *argv[]) {
                     char lo_buffer[64];
                     auto num2 = std::to_chars(lo_buffer, lo_buffer + 64, min_value);
                     *num2.ptr = 0;
-#if 0
-                    { // Render a chart with markers
-                        struct nk_rect widget_bounds = nk_widget_bounds(ctx);
-                        nk_chart_begin_colored(ctx, nk_chart_type::NK_CHART_LINES, graphs[i].colors[0],
-                                               ctx->style.chart.selected_color, graphs[i].limit, min_value, max_value);
 
-                        for (size_t s = 0; s < graphs[i].values.size() && s < NK_CHART_MAX_SLOT; s++) {
-                            if (s > 0) {
-                                nk_chart_add_slot_colored(ctx, nk_chart_type::NK_CHART_LINES, graphs[i].colors[s],
-                                                          ctx->style.chart.selected_color, graphs[i].limit, min_value,
-                                                          max_value);
-                            }
-                            //NK_COMMAND_POLYLINE
-                            for (size_t idx = offset; idx < graphs[i].values[s].size(); idx++) {
-                                //x, y 
-                                nk_flags res = nk_chart_push_slot(ctx, graphs[i].values[s][idx].y, s);
-                                if (res & NK_CHART_HOVERING) {
-                                    // do something when hoving over a point (show its x, y coordinate)
-                                    char text[64];
-                                    auto xchrs = std::to_chars(text, text + 64, graphs[i].values[s][idx].x);
-                                    *xchrs.ptr = ',';
-                                    auto chrs = std::to_chars(xchrs.ptr + 1, text + 64, graphs[i].values[s][idx].y);
-                                    size_t text_len = chrs.ptr - text;
-
-                                    const struct nk_style *style = &ctx->style;
-                                    struct nk_vec2 padding = style->window.padding;
-
-                                    float text_width =
-                                        style->font->width(style->font->userdata, style->font->height, text, text_len);
-                                    text_width += (4 * padding.x);
-
-                                    float text_height = (style->font->height + 2 * padding.y);
-
-                                    if (nk_tooltip_begin(ctx, (float)text_width)) {
-                                        nk_layout_row_dynamic(ctx, (float)text_height, 1);
-                                        nk_text(ctx, text, text_len, NK_TEXT_LEFT);
-                                        nk_tooltip_end(ctx);
-                                    }
-                                }
-                                if (res & NK_CHART_CLICKED) {
-                                    // do something when a point is clicked
-                                }
-                            }
-                        }
-
-                        nk_chart_draw_yticks(ctx, 4, NK_TEXT_ALIGN_LEFT);
-                        nk_chart_draw_ytick_value(ctx, max_value, NK_TEXT_ALIGN_LEFT);
-                        nk_chart_draw_ytick_value(ctx, min_value, NK_TEXT_ALIGN_LEFT);
-
-                        for (size_t s = 0; s < graphs[i].values.size() && s < NK_CHART_MAX_SLOT; s++) {
-                            // have a line that prints / tracks the last value
-                            nk_chart_draw_ytick_value(ctx, graphs[i].values[s].back().y, NK_TEXT_ALIGN_RIGHT);
-                            nk_chart_slot_title(ctx, graphs[i].labels[s].c_str(), graphs[i].labels[s].size(),
-                                                NK_TEXT_ALIGN_RIGHT, s);
-                        }
-
-                        nk_chart_title(ctx, graphs[i].title.c_str(), graphs[i].title.size(),
-                                       NK_TEXT_ALIGN_CENTERED | NK_TEXT_ALIGN_TOP);
-
-                        nk_chart_end(ctx);
-                    }
-#else
                     {
                         struct nk_window *win;
                         struct nk_chart *chart;
@@ -1935,7 +1590,6 @@ int main(int argc, char *argv[]) {
                             }
                         }
                     }
-#endif
                 }
             }
         }
@@ -1951,7 +1605,7 @@ int main(int argc, char *argv[]) {
          * defaults everything back into a default state.
          * Make sure to either a.) save and restore or b.) reset your own
          * state after rendering the UI. */
-        nk_glfw3_render(NK_ANTI_ALIASING_ON);
+        nk_glfw3_render((nk_anti_aliasing)antialiasing); // NK_ANTI_ALIASING_ON
         glfwSwapBuffers(win);
         Sleep(24);
         // Sleep(100);
