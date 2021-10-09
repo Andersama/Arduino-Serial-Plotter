@@ -10,7 +10,10 @@
 //#include <format>
 #include <fmt/core.h>
 #include <fmt/format.h>
+#include <string>
 #include <array>
+#include <memory>
+#include <memory_resource>
 
 class Serial
 {
@@ -184,8 +187,12 @@ public:
 
 	int Connect(int portIndex, bool reset, uint32_t baud_rate) {
 		char lpTargetPath[5000]; // buffer to store the path of the COMPORTS
-		std::string str;
-		str.reserve(512);
+
+		char buffer[64];
+		std::pmr::monotonic_buffer_resource m(buffer, 64);
+		std::pmr::string str(&m);
+		str.reserve(64);
+		//std::string str;
 
 		fmt::format_to(std::back_inserter(str), std::string_view{ "COM{}" }, portIndex);
 		DWORD test = QueryDosDevice(str.c_str(), lpTargetPath, 5000);
@@ -226,8 +233,11 @@ public:
 			ret[i] = 0;
 
 		char lpTargetPath[5000]; // buffer to store the path of the COMPORTS
-		std::string str;
-		str.reserve(512);
+
+		char buffer[64];
+		std::pmr::monotonic_buffer_resource m(buffer, 64);
+		std::pmr::string str(&m);
+		str.reserve(64);
 
 		for (int i = 0; i < 255; i++) // checking ports from COM0 to COM255
 		{
@@ -246,8 +256,11 @@ public:
 		std::array<std::string, 256> ret;
 
 		char lpTargetPath[5000]; // buffer to store the path of the COMPORTS
-		std::string str;
-		str.reserve(512);
+
+		char buffer[64];
+		std::pmr::monotonic_buffer_resource m(buffer, 64);
+		std::pmr::string str(&m);
+		str.reserve(64);
 
 		for (int i = 0; i < 255; i++) // checking ports from COM0 to COM255
 		{

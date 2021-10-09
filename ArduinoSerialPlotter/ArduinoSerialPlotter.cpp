@@ -1174,7 +1174,7 @@ int main(int argc, char *argv[]) {
                 read_count = SerialPort.ReadData(ptr, (mx_width - (2 * SIMDJSON_PADDING)));
                 ptr[read_count] = 0;
 
-                if (read_count) {
+                if (read_count > 0) { // -1 is failure so check > 0
                     size_t g = handle_json(parser, ctx, graphs, ptr, read_count);
                     graphs_to_display = (g > 0 && g != graphs_to_display) ? g : graphs_to_display;
                 }

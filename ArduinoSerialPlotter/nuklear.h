@@ -9590,7 +9590,7 @@ NK_INTERN void nk_process_r8g8b8(void* attribute, const float* values, int value
     struct nk_color col = nk_rgba_fv(values);
     NK_MEMCPY(attribute, &col.r, sizeof(col));
 }
-NK_INTERN void nk_process_r16g16b16(void* attribute, const float* values, int value_count) {
+NK_INTERN void nk_process_r16g15b16(void* attribute, const float* values, int value_count) {
     nk_ushort col[3];
     col[0] = (nk_ushort)(values[0] * (float)NK_USHORT_MAX);
     col[1] = (nk_ushort)(values[1] * (float)NK_USHORT_MAX);
@@ -9613,7 +9613,7 @@ NK_INTERN void nk_process_b8g8r8a8(void* attribute, const float* values, int val
     struct nk_color bgra = nk_rgba(col.b, col.g, col.r, col.a);
     NK_MEMCPY(attribute, &bgra, sizeof(bgra));
 }
-NK_INTERN void nk_process_r16g16b16a16(void* attribute, const float* values, int value_count) {
+NK_INTERN void nk_process_r16g15b16a16(void* attribute, const float* values, int value_count) {
     nk_ushort col[4];
     col[0] = (nk_ushort)(values[0] * (float)NK_USHORT_MAX);
     col[1] = (nk_ushort)(values[1] * (float)NK_USHORT_MAX);
@@ -9650,29 +9650,31 @@ NK_INTERN void nk_process_rgba32(void* attribute, const float* values, int value
     nk_uint color = nk_color_u32(col);
     NK_MEMCPY(attribute, &color, sizeof(color));
 }
-NK_INTERN void nk_process_invalid(void* attribute, const float* values, int value_count) {
+NK_INTERN void nk_process_invalid_color_format(void* attribute, const float* values, int value_count) {
+    NK_ASSERT(0 && "invalid format");
+}
+NK_INTERN void nk_process_invalid_vertex_format(void* attribute, const float* values, int value_count) {
+    NK_ASSERT(0 && "invalid format");
 }
 void(*nk_draw_vertex_color_vtable[])(void*, const float*, int) = {
-    nk_process_invalid,
-    nk_process_invalid,
-    nk_process_invalid,
-    nk_process_invalid,
-    nk_process_invalid,
-    nk_process_invalid,
-    nk_process_invalid,
-    nk_process_invalid, //
+    nk_process_invalid_color_format,
+    nk_process_invalid_color_format,
+    nk_process_invalid_color_format,
+    nk_process_invalid_color_format,
+    nk_process_invalid_color_format,
+    nk_process_invalid_color_format,
+    nk_process_invalid_color_format,
+    nk_process_invalid_color_format,
     nk_process_r8g8b8,
-    nk_process_r16g16b16,
+    nk_process_r16g15b16,
     nk_process_r32g32b32,
-
-    nk_process_r8g8b8a8, //nk_process_r8g8b8a8
+    nk_process_r8g8b8a8,
     nk_process_b8g8r8a8,
-    nk_process_r16g16b16a16,
+    nk_process_r16g15b16a16,
     nk_process_r32g32b32a32,
     nk_process_r32g32b32a32_float,
     nk_process_r32g32b32a32_double,
     nk_process_rgb32,
-
     nk_process_rgba32
 };
 void(*nk_draw_vertex_element_vtable[])(void*, const float*, int) = {
@@ -9684,19 +9686,17 @@ void(*nk_draw_vertex_element_vtable[])(void*, const float*, int) = {
     nk_process_uint,
     nk_process_float,
     nk_process_double,
-    nk_process_invalid,
-    nk_process_invalid,
-    nk_process_invalid,
-
-    nk_process_invalid,
-    nk_process_invalid,
-    nk_process_invalid,
-    nk_process_invalid,
-    nk_process_invalid,
-    nk_process_invalid,
-
-    nk_process_invalid,
-    nk_process_invalid
+    nk_process_invalid_vertex_format,
+    nk_process_invalid_vertex_format,
+    nk_process_invalid_vertex_format,
+    nk_process_invalid_vertex_format,
+    nk_process_invalid_vertex_format,
+    nk_process_invalid_vertex_format,
+    nk_process_invalid_vertex_format,
+    nk_process_invalid_vertex_format,
+    nk_process_invalid_vertex_format,
+    nk_process_invalid_vertex_format,
+    nk_process_invalid_vertex_format
 };
 NK_INTERN void
 nk_draw_vertex_color(void* attr, const float* vals,
@@ -9787,62 +9787,12 @@ nk_draw_vertex_element(void* dst, const float* values, int value_count,
     void(*nk_callback)(void*, const float*, int);
     void* attribute = dst;
     /* if this triggers you tried to provide a color format for a value */
-    NK_ASSERT(format < NK_FORMAT_COLOR_BEGIN);
-    //if (format >= NK_FORMAT_COLOR_BEGIN && format <= NK_FORMAT_COLOR_END) return;
-    if (format > NK_FORMAT_COLOR_END)
-        NK_ASSERT(0 && "invalid vertex layout format");
-    nk_callback = nk_draw_vertex_element_vtable[(uint8_t)format & 0xf];
-    nk_callback(dst,values,value_count);
-    return;
-    /*
-    if (format == NK_FORMAT_FLOAT) {
-        NK_MEMCPY(attribute, values, sizeof(float)*value_count);
-        return;
-    }
-    */
-    for (value_index = 0; value_index < value_count; ++value_index) {
-        switch (format) {
-        default: NK_ASSERT(0 && "invalid vertex layout format"); break;
-        case NK_FORMAT_SCHAR: {
-            char value = (char)NK_CLAMP((float)NK_SCHAR_MIN, values[value_index], (float)NK_SCHAR_MAX);
-            NK_MEMCPY(attribute, &value, sizeof(value));
-            attribute = (void*)((char*)attribute + sizeof(char));
-        } break;
-        case NK_FORMAT_SSHORT: {
-            nk_short value = (nk_short)NK_CLAMP((float)NK_SSHORT_MIN, values[value_index], (float)NK_SSHORT_MAX);
-            NK_MEMCPY(attribute, &value, sizeof(value));
-            attribute = (void*)((char*)attribute + sizeof(value));
-        } break;
-        case NK_FORMAT_SINT: {
-            nk_int value = (nk_int)NK_CLAMP((float)NK_SINT_MIN, values[value_index], (float)NK_SINT_MAX);
-            NK_MEMCPY(attribute, &value, sizeof(value));
-            attribute = (void*)((char*)attribute + sizeof(nk_int));
-        } break;
-        case NK_FORMAT_UCHAR: {
-            unsigned char value = (unsigned char)NK_CLAMP((float)NK_UCHAR_MIN, values[value_index], (float)NK_UCHAR_MAX);
-            NK_MEMCPY(attribute, &value, sizeof(value));
-            attribute = (void*)((char*)attribute + sizeof(unsigned char));
-        } break;
-        case NK_FORMAT_USHORT: {
-            nk_ushort value = (nk_ushort)NK_CLAMP((float)NK_USHORT_MIN, values[value_index], (float)NK_USHORT_MAX);
-            NK_MEMCPY(attribute, &value, sizeof(value));
-            attribute = (void*)((char*)attribute + sizeof(value));
-        } break;
-        case NK_FORMAT_UINT: {
-            nk_uint value = (nk_uint)NK_CLAMP((float)NK_UINT_MIN, values[value_index], (float)NK_UINT_MAX);
-            NK_MEMCPY(attribute, &value, sizeof(value));
-            attribute = (void*)((char*)attribute + sizeof(nk_uint));
-        } break;
-        case NK_FORMAT_FLOAT:
-            NK_MEMCPY(attribute, &values[value_index], sizeof(values[value_index]));
-            attribute = (void*)((char*)attribute + sizeof(float));
-            break;
-        case NK_FORMAT_DOUBLE: {
-            double value = (double)values[value_index];
-            NK_MEMCPY(attribute, &value, sizeof(value));
-            attribute = (void*)((char*)attribute + sizeof(double));
-        } break;
-        }
+    NK_ASSERT(!(format > NK_FORMAT_COLOR_END) && "invalid vertex layout format");
+    NK_ASSERT((format < NK_FORMAT_COLOR_BEGIN) && "color format is not a vertex format");
+
+    if (format < NK_FORMAT_COLOR_BEGIN) {
+        nk_callback = nk_draw_vertex_element_vtable[(uint8_t)format];
+        nk_callback(dst,values,value_count);
     }
 }
 NK_INTERN void*
