@@ -9656,7 +9656,7 @@ NK_INTERN void nk_process_invalid_color_format(void* attribute, const float* val
 NK_INTERN void nk_process_invalid_vertex_format(void* attribute, const float* values, int value_count) {
     NK_ASSERT(0 && "invalid format");
 }
-void(*nk_draw_vertex_color_vtable[])(void*, const float*, int) = {
+void(*nk_draw_vertex_color_jtable[])(void*, const float*, int) = {
     nk_process_invalid_color_format,
     nk_process_invalid_color_format,
     nk_process_invalid_color_format,
@@ -9675,9 +9675,10 @@ void(*nk_draw_vertex_color_vtable[])(void*, const float*, int) = {
     nk_process_r32g32b32a32_float,
     nk_process_r32g32b32a32_double,
     nk_process_rgb32,
-    nk_process_rgba32
+    nk_process_rgba32,
+    nk_process_invalid_color_format //tailing jump table invalid call
 };
-void(*nk_draw_vertex_element_vtable[])(void*, const float*, int) = {
+void(*nk_draw_vertex_element_jtable[])(void*, const float*, int) = {
     nk_process_schar,
     nk_process_sshort,
     nk_process_sint,
@@ -9696,7 +9697,7 @@ void(*nk_draw_vertex_element_vtable[])(void*, const float*, int) = {
     nk_process_invalid_vertex_format,
     nk_process_invalid_vertex_format,
     nk_process_invalid_vertex_format,
-    nk_process_invalid_vertex_format
+    nk_process_invalid_vertex_format //tailing jump table invalid call
 };
 NK_INTERN void
 nk_draw_vertex_color(void* attr, const float* vals,
@@ -9708,108 +9709,57 @@ nk_draw_vertex_color(void* attr, const float* vals,
 
     NK_ASSERT(format >= NK_FORMAT_COLOR_BEGIN);
     NK_ASSERT(format <= NK_FORMAT_COLOR_END);
-    if (format < NK_FORMAT_COLOR_BEGIN || format > NK_FORMAT_COLOR_END) return;
+    //if (format < NK_FORMAT_COLOR_BEGIN || format > NK_FORMAT_COLOR_END) return;
 
     val[0] = NK_SATURATE(vals[0]);
     val[1] = NK_SATURATE(vals[1]);
     val[2] = NK_SATURATE(vals[2]);
     val[3] = NK_SATURATE(vals[3]);
-    nk_callback = nk_draw_vertex_color_vtable[(uint8_t)format];
+    uint8_t jump_idx = NK_MIN((uint8_t)format, (uint8_t)NK_FORMAT_COUNT);
+    nk_callback = nk_draw_vertex_color_jtable[jump_idx];
     nk_callback(attr, val, 1);
-    return;
-
-    switch (format) {
-    default: NK_ASSERT(0 && "Invalid vertex layout color format"); break;
-    case NK_FORMAT_R8G8B8A8:
-    case NK_FORMAT_R8G8B8: {
-        struct nk_color col = nk_rgba_fv(val);
-        NK_MEMCPY(attr, &col.r, sizeof(col));
-    } break;
-    case NK_FORMAT_B8G8R8A8: {
-        struct nk_color col = nk_rgba_fv(val);
-        struct nk_color bgra = nk_rgba(col.b, col.g, col.r, col.a);
-        NK_MEMCPY(attr, &bgra, sizeof(bgra));
-    } break;
-    case NK_FORMAT_R16G15B16: {
-        nk_ushort col[3];
-        col[0] = (nk_ushort)(val[0] * (float)NK_USHORT_MAX);
-        col[1] = (nk_ushort)(val[1] * (float)NK_USHORT_MAX);
-        col[2] = (nk_ushort)(val[2] * (float)NK_USHORT_MAX);
-        NK_MEMCPY(attr, col, sizeof(col));
-    } break;
-    case NK_FORMAT_R16G15B16A16: {
-        nk_ushort col[4];
-        col[0] = (nk_ushort)(val[0] * (float)NK_USHORT_MAX);
-        col[1] = (nk_ushort)(val[1] * (float)NK_USHORT_MAX);
-        col[2] = (nk_ushort)(val[2] * (float)NK_USHORT_MAX);
-        col[3] = (nk_ushort)(val[3] * (float)NK_USHORT_MAX);
-        NK_MEMCPY(attr, col, sizeof(col));
-    } break;
-    case NK_FORMAT_R32G32B32: {
-        nk_uint col[3];
-        col[0] = (nk_uint)(val[0] * (float)NK_UINT_MAX);
-        col[1] = (nk_uint)(val[1] * (float)NK_UINT_MAX);
-        col[2] = (nk_uint)(val[2] * (float)NK_UINT_MAX);
-        NK_MEMCPY(attr, col, sizeof(col));
-    } break;
-    case NK_FORMAT_R32G32B32A32: {
-        nk_uint col[4];
-        col[0] = (nk_uint)(val[0] * (float)NK_UINT_MAX);
-        col[1] = (nk_uint)(val[1] * (float)NK_UINT_MAX);
-        col[2] = (nk_uint)(val[2] * (float)NK_UINT_MAX);
-        col[3] = (nk_uint)(val[3] * (float)NK_UINT_MAX);
-        NK_MEMCPY(attr, col, sizeof(col));
-    } break;
-    case NK_FORMAT_R32G32B32A32_FLOAT:
-        NK_MEMCPY(attr, val, sizeof(float) * 4);
-        break;
-    case NK_FORMAT_R32G32B32A32_DOUBLE: {
-        double col[4];
-        col[0] = (double)val[0];
-        col[1] = (double)val[1];
-        col[2] = (double)val[2];
-        col[3] = (double)val[3];
-        NK_MEMCPY(attr, col, sizeof(col));
-    } break;
-    case NK_FORMAT_RGB32:
-    case NK_FORMAT_RGBA32: {
-        struct nk_color col = nk_rgba_fv(val);
-        nk_uint color = nk_color_u32(col);
-        NK_MEMCPY(attr, &color, sizeof(color));
-    } break;
-    }
 }
 NK_INTERN void
-nk_draw_vertex_element(void* dst, const float* values, int value_count,
+nk_draw_vertex_element(void *dst, const float *values, int value_count,
     enum nk_draw_vertex_layout_format format)
 {
     int value_index;
     void(*nk_callback)(void*, const float*, int);
-    void* attribute = dst;
-    /* if this triggers you tried to provide a color format for a value */
-    NK_ASSERT(!(format > NK_FORMAT_COLOR_END) && "invalid vertex layout format");
-    NK_ASSERT((format < NK_FORMAT_COLOR_BEGIN) && "color format is not a vertex format");
 
-    if (format < NK_FORMAT_COLOR_BEGIN) {
-        nk_callback = nk_draw_vertex_element_vtable[(uint8_t)format];
-        nk_callback(dst,values,value_count);
-    }
+    /* if this triggers you tried to provide a color format for a value */
+    uint8_t jump_idx = NK_MIN((uint8_t)format, (uint8_t)NK_FORMAT_COUNT);
+    nk_callback = nk_draw_vertex_element_jtable[jump_idx];
+    nk_callback(dst,values,value_count);
 }
+NK_INTERN void nk_draw_invalid(void*, const float*, int, enum nk_draw_vertex_layout_format) {
+    NK_ASSERT(0 && "invalid format");
+}
+NK_INTERN void
+nk_process_draw_vertex_color(void* attr, const float* vals, int value_count,
+    enum nk_draw_vertex_layout_format format) {
+    nk_draw_vertex_color(attr, vals, format);
+}
+void(*nk_draw_vertex_jtable[])(void*, const float*, int, enum nk_draw_vertex_layout_format) = {
+    nk_draw_vertex_element,
+    nk_process_draw_vertex_color,
+    nk_draw_vertex_element,
+    nk_draw_invalid
+};
 NK_INTERN void*
 nk_draw_vertex(void* dst, const struct nk_convert_config* config,
     struct nk_vec2 pos, struct nk_vec2 uv, struct nk_colorf color)
 {
     void* result = (void*)((char*)dst + config->vertex_size);
     const struct nk_draw_vertex_layout_element* elem_iter = config->vertex_layout;
+    int sizes[] = {2,1,2,0};
     while (!nk_draw_vertex_layout_element_is_end_of_layout(elem_iter)) {
         void* address = (void*)((char*)dst + elem_iter->offset);
-        switch (elem_iter->attribute) {
-        case NK_VERTEX_ATTRIBUTE_COUNT:
-        default: NK_ASSERT(0 && "wrong element attribute"); break;
-        case NK_VERTEX_POSITION: nk_draw_vertex_element(address, &pos.x, 2, elem_iter->format); break;
-        case NK_VERTEX_TEXCOORD: nk_draw_vertex_element(address, &uv.x, 2, elem_iter->format); break;
-        case NK_VERTEX_COLOR: nk_draw_vertex_color(address, &color.r, elem_iter->format); break;
-        }
+        //create a quick array of the potential points to pick
+        float *data[] = {&pos.x, &color.r, &uv.x, nullptr};
+
+        uint8_t jump_idx = NK_MIN((uint8_t)elem_iter->attribute, (uint8_t)NK_VERTEX_ATTRIBUTE_COUNT);
+        nk_draw_vertex_jtable[jump_idx](address, data[jump_idx], sizes[jump_idx], elem_iter->format);
+
         elem_iter++;
     }
     return result;
@@ -9912,14 +9862,19 @@ nk_draw_list_stroke_poly_line(struct nk_draw_list* list, const struct nk_vec2* p
                 nk_size idx2 = ((i1 + 1) == points_count) ? index : (idx1 + 3);
 
                 /* average normals */
-                dm = nk_vec2_muls(nk_vec2_add(normals[i1], normals[i2]), 0.5f);
+                dm = {(normals[i1].x+normals[i2].x)*0.5f,(normals[i1].y+normals[i2].y)*0.5f};
                 dmr2 = dm.x * dm.x + dm.y * dm.y;
+
+                float scale = 1.0f / dmr2;
+                scale = NK_MIN(100.0f, scale);
+                dm = (dmr2 > 0.000001f) ? (nk_vec2_muls(dm, scale)) : dm;
+                /*
                 if (dmr2 > 0.000001f) {
                     float scale = 1.0f / dmr2;
                     scale = NK_MIN(100.0f, scale);
                     dm = nk_vec2_muls(dm, scale);
                 }
-
+                */
                 dm = nk_vec2_muls(dm, AA_SIZE);
                 temp[i2 * 2 + 0] = nk_vec2_add(points[i2], dm);
                 temp[i2 * 2 + 1] = nk_vec2_sub(points[i2], dm);
@@ -9971,6 +9926,13 @@ nk_draw_list_stroke_poly_line(struct nk_draw_list* list, const struct nk_vec2* p
                 nk_size idx2 = ((i1 + 1) == points_count) ? index : (idx1 + 4);
 
                 /* average normals */
+                struct nk_vec2 dm = {(normals[i1].x+normals[i2].x)*0.5f,(normals[i1].y+normals[i2].y)*0.5f};
+                float dmr2 = dm.x * dm.x + dm.y * dm.y;
+
+                float scale = 1.0f / dmr2;
+                scale = NK_MIN(100.0f, scale);
+                dm = (dmr2 > 0.000001f) ? (nk_vec2_muls(dm, scale)) : dm;
+                /*
                 struct nk_vec2 dm = nk_vec2_muls(nk_vec2_add(normals[i1], normals[i2]), 0.5f);
                 float dmr2 = dm.x * dm.x + dm.y * dm.y;
                 if (dmr2 > 0.000001f) {
@@ -9978,7 +9940,7 @@ nk_draw_list_stroke_poly_line(struct nk_draw_list* list, const struct nk_vec2* p
                     scale = NK_MIN(100.0f, scale);
                     dm = nk_vec2_muls(dm, scale);
                 }
-
+                */
                 dm_out = nk_vec2_muls(dm, ((half_inner_thickness)+AA_SIZE));
                 dm_in = nk_vec2_muls(dm, half_inner_thickness);
                 temp[i2 * 4 + 0] = nk_vec2_add(points[i2], dm_out);
@@ -10137,6 +10099,13 @@ nk_draw_list_fill_poly_convex(struct nk_draw_list* list,
             const struct nk_vec2 uv = list->config.null.uv;
             struct nk_vec2 n0 = normals[i0];
             struct nk_vec2 n1 = normals[i1];
+            struct nk_vec2 dm = {(n0.x+n1.x)*0.5f,(n0.y+n1.y)*0.5f};
+            float dmr2 = dm.x * dm.x + dm.y * dm.y;
+
+            float scale = 1.0f / dmr2;
+            scale = NK_MIN(100.0f, scale);
+            dm = (dmr2 > 0.000001f) ? (nk_vec2_muls(dm, scale)) : dm;
+            /*
             struct nk_vec2 dm = nk_vec2_muls(nk_vec2_add(n0, n1), 0.5f);
             float dmr2 = dm.x * dm.x + dm.y * dm.y;
             if (dmr2 > 0.000001f) {
@@ -10144,6 +10113,7 @@ nk_draw_list_fill_poly_convex(struct nk_draw_list* list,
                 scale = NK_MIN(scale, 100.0f);
                 dm = nk_vec2_muls(dm, scale);
             }
+            */
             dm = nk_vec2_muls(dm, AA_SIZE * 0.5f);
 
             /* add vertices */
