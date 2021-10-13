@@ -754,6 +754,10 @@ int main(int argc, char *argv[]) {
     int graphs_to_display = 0;
 
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+
+    smooth_data<double> smooth_fps;
+    smooth_fps.lerp_v = 0.0001;
+    smooth_fps.value = 60.0;
     while (!glfwWindowShouldClose(win)) {
         /* Input */
         glfwPollEvents();
@@ -768,11 +772,21 @@ int main(int argc, char *argv[]) {
         size_t current_timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
         size_t timestamp_diff = current_timestamp - previous_timestamp;
         previous_timestamp = current_timestamp;
+        
+        constexpr double ns_per_second = 1'000'000'000.0;
+        double fps = 1.0 / ((double)timestamp_diff / (double)ns_per_second);
+        double fps_smoothed = smooth_fps.get_next_smooth(fps);
+        //ImGui::ShowDemoWindow();
 
         {
             ImGui::Begin("Hello World");
-
+            
             ImGui::Checkbox("Demo", &demo_mode);
+            //bool nvsync = vsync;
+            ImGui::Checkbox("VSync", &vsync);
+            glfwSwapInterval(vsync);
+            //ImGui::LabelText("FPS")
+            ImGui::LabelText("FPS", "%.2f", fps_smoothed);
 
             if (demo_mode) {
                 /* Randomly Generated Data */
@@ -853,7 +867,8 @@ int main(int argc, char *argv[]) {
                 double xmax = std::numeric_limits<double>::min();
                 double ymin = std::numeric_limits<double>::max();
                 double ymax = std::numeric_limits<double>::min();
-                for (size_t s = 0; s < graphs[i].values.size(); s++) {
+                size_t slot_count = std::min(graphs[i].values.size(), graphs[i].slots);
+                for (size_t s = 0; s < slot_count; s++) {
                     for (size_t idx = 0; idx < graphs[i].values[s].size(); idx++) {
                         xmin = std::min(xmin, (double)graphs[i].values[s][idx].x);
                         xmax = std::max(xmax, (double)graphs[i].values[s][idx].x);
@@ -865,7 +880,7 @@ int main(int argc, char *argv[]) {
                 
                 ImPlot::SetNextPlotLimits(xmin,xmax,ymin,ymax,ImGuiCond_Always);
                 if (ImPlot::BeginPlot(graphs[i].title.c_str(), "Time")) {
-                    for (size_t s = 0; s < graphs[i].values.size(); s++) {
+                    for (size_t s = 0; s < slot_count; s++) {
                         //ImPlot::PlotLine(graphs[i].labels[s].c_str(),)
                         ImPlot::PlotLineG(graphs[i].labels[s].c_str(), [](void* data, int idx){
                             float *ptr = (float*)data;
