@@ -354,6 +354,27 @@ nk_glfw3_lock_buffer()
     dev->buffer_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 }
 
+NK_API void nk_glfw3_vertex_layout(void* dst, struct nk_vec2 pos, struct nk_vec2 uv, struct nk_colorf color) {
+    /* Position and UV */
+    float *ptr = (float*)dst;
+    ptr[0] = pos.x;
+    ptr[1] = pos.y;
+    ptr[2] = uv.x;
+    ptr[3] = uv.y;
+    /* Color */
+    /*
+    struct nk_color col = nk_rgba_fv(&color.r);
+    NK_MEMCPY(ptr+4, &col.r, sizeof(col));
+    */
+    
+    nk_byte *ptr_color = (nk_byte*)(ptr+4);
+    ptr_color[0] = NK_SATURATE(color.r) * 255;
+    ptr_color[1] = NK_SATURATE(color.g) * 255;
+    ptr_color[2] = NK_SATURATE(color.b) * 255;
+    ptr_color[3] = NK_SATURATE(color.a) * 255;
+    
+}
+
 NK_API void
 nk_glfw3_render(enum nk_anti_aliasing AA)
 {
@@ -404,7 +425,11 @@ nk_glfw3_render(enum nk_anti_aliasing AA)
                     {NK_VERTEX_LAYOUT_END}
                 };
                 memset(&config, 0, sizeof(config));
+#ifndef NK_USE_VERTEX_CALLBACK
                 config.vertex_layout = vertex_layout;
+#else
+                config.vertex_layout = nk_glfw3_vertex_layout;
+#endif
                 config.vertex_size = sizeof(struct nk_glfw_vertex);
                 config.vertex_alignment = NK_ALIGNOF(struct nk_glfw_vertex);
                 config.null = dev->null;
@@ -432,10 +457,12 @@ nk_glfw3_render(enum nk_anti_aliasing AA)
             tex_index = cmd->texture.id;
             tex_handle = nk_glfw3_get_tex_ogl_handle(tex_index);
 
+            /* In testing this code gets extremely hot, seems to suggest an issue with this */
             /* tex handle must be made resident in each context that uses it */
+            
             if (!glIsTextureHandleResidentARB(tex_handle))
                 glMakeTextureHandleResidentARB(tex_handle);
-
+                
             glUniformHandleui64ARB(dev->uniform_tex, tex_handle);
             glScissor(
                 (GLint)(cmd->clip_rect.x * glfw.fb_scale.x),

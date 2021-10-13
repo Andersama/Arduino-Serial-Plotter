@@ -395,6 +395,10 @@ extern "C" {
 #endif
 #endif
 
+#ifndef NK_HASH
+#define NK_HASH nk_murmur_hash
+#endif
+
     typedef NK_INT8 nk_char;
     typedef NK_UINT8 nk_uchar;
     typedef NK_UINT8 nk_byte;
@@ -1151,6 +1155,20 @@ extern "C" {
         nk_handle texture; /* texture handle to a texture with a white pixel */
         struct nk_vec2 uv; /* coordinates to a white pixel in the texture  */
     };
+#ifdef NK_USE_VERTEX_CALLBACK
+    struct nk_convert_config {
+        float global_alpha; /* global alpha value */
+        enum nk_anti_aliasing line_AA; /* line anti-aliasing flag can be turned off if you are tight on memory */
+        enum nk_anti_aliasing shape_AA; /* shape anti-aliasing flag can be turned off if you are tight on memory */
+        unsigned circle_segment_count; /* number of segments used for circles: default to 22 */
+        unsigned arc_segment_count; /* number of segments used for arcs: default to 22 */
+        unsigned curve_segment_count; /* number of segments used for curves: default to 22 */
+        struct nk_draw_null_texture null; /* handle to texture with a white pixel for shape drawing */
+        void (*vertex_layout)(void* dst, struct nk_vec2 pos, struct nk_vec2 uv, struct nk_colorf color); /* writes the vertex output format and packing */
+        nk_size vertex_size; /* sizeof one vertex for vertex packing */
+        nk_size vertex_alignment; /* vertex alignment: Can be obtained by NK_ALIGNOF */
+    };
+#else
     struct nk_convert_config {
         float global_alpha; /* global alpha value */
         enum nk_anti_aliasing line_AA; /* line anti-aliasing flag can be turned off if you are tight on memory */
@@ -1163,6 +1181,7 @@ extern "C" {
         nk_size vertex_size; /* sizeof one vertex for vertex packing */
         nk_size vertex_alignment; /* vertex alignment: Can be obtained by NK_ALIGNOF */
     };
+#endif
     /*/// #### nk__begin
     /// Returns a draw command list iterator to iterate all draw
     /// commands accumulated over one frame.
@@ -9699,6 +9718,7 @@ void(*nk_draw_vertex_element_jtable[])(void*, const float*, int) = {
     nk_process_invalid_vertex_format,
     nk_process_invalid_vertex_format //tailing jump table invalid call
 };
+#ifdef NK_USE_JUMPTABLES
 NK_INTERN void
 nk_draw_vertex_color(void* attr, const float* vals,
     enum nk_draw_vertex_layout_format format)
@@ -9719,6 +9739,84 @@ nk_draw_vertex_color(void* attr, const float* vals,
     nk_callback = nk_draw_vertex_color_jtable[jump_idx];
     nk_callback(attr, val, 1);
 }
+#else
+NK_INTERN void
+nk_draw_vertex_color(void *attr, const float *vals,
+    enum nk_draw_vertex_layout_format format)
+{
+    /* if this triggers you tried to provide a value format for a color */
+    float val[4];
+    NK_ASSERT(format >= NK_FORMAT_COLOR_BEGIN);
+    NK_ASSERT(format <= NK_FORMAT_COLOR_END);
+    if (format < NK_FORMAT_COLOR_BEGIN || format > NK_FORMAT_COLOR_END) return;
+
+    val[0] = NK_SATURATE(vals[0]);
+    val[1] = NK_SATURATE(vals[1]);
+    val[2] = NK_SATURATE(vals[2]);
+    val[3] = NK_SATURATE(vals[3]);
+
+    switch (format) {
+    default: NK_ASSERT(0 && "Invalid vertex layout color format"); break;
+    case NK_FORMAT_R8G8B8A8:
+    case NK_FORMAT_R8G8B8: {
+        struct nk_color col = nk_rgba_fv(val);
+        NK_MEMCPY(attr, &col.r, sizeof(col));
+    } break;
+    case NK_FORMAT_B8G8R8A8: {
+        struct nk_color col = nk_rgba_fv(val);
+        struct nk_color bgra = nk_rgba(col.b, col.g, col.r, col.a);
+        NK_MEMCPY(attr, &bgra, sizeof(bgra));
+    } break;
+    case NK_FORMAT_R16G15B16: {
+        nk_ushort col[3];
+        col[0] = (nk_ushort)(val[0]*(float)NK_USHORT_MAX);
+        col[1] = (nk_ushort)(val[1]*(float)NK_USHORT_MAX);
+        col[2] = (nk_ushort)(val[2]*(float)NK_USHORT_MAX);
+        NK_MEMCPY(attr, col, sizeof(col));
+    } break;
+    case NK_FORMAT_R16G15B16A16: {
+        nk_ushort col[4];
+        col[0] = (nk_ushort)(val[0]*(float)NK_USHORT_MAX);
+        col[1] = (nk_ushort)(val[1]*(float)NK_USHORT_MAX);
+        col[2] = (nk_ushort)(val[2]*(float)NK_USHORT_MAX);
+        col[3] = (nk_ushort)(val[3]*(float)NK_USHORT_MAX);
+        NK_MEMCPY(attr, col, sizeof(col));
+    } break;
+    case NK_FORMAT_R32G32B32: {
+        nk_uint col[3];
+        col[0] = (nk_uint)(val[0]*(float)NK_UINT_MAX);
+        col[1] = (nk_uint)(val[1]*(float)NK_UINT_MAX);
+        col[2] = (nk_uint)(val[2]*(float)NK_UINT_MAX);
+        NK_MEMCPY(attr, col, sizeof(col));
+    } break;
+    case NK_FORMAT_R32G32B32A32: {
+        nk_uint col[4];
+        col[0] = (nk_uint)(val[0]*(float)NK_UINT_MAX);
+        col[1] = (nk_uint)(val[1]*(float)NK_UINT_MAX);
+        col[2] = (nk_uint)(val[2]*(float)NK_UINT_MAX);
+        col[3] = (nk_uint)(val[3]*(float)NK_UINT_MAX);
+        NK_MEMCPY(attr, col, sizeof(col));
+    } break;
+    case NK_FORMAT_R32G32B32A32_FLOAT:
+        NK_MEMCPY(attr, val, sizeof(float)*4);
+        break;
+    case NK_FORMAT_R32G32B32A32_DOUBLE: {
+        double col[4];
+        col[0] = (double)val[0];
+        col[1] = (double)val[1];
+        col[2] = (double)val[2];
+        col[3] = (double)val[3];
+        NK_MEMCPY(attr, col, sizeof(col));
+    } break;
+    case NK_FORMAT_RGB32:
+    case NK_FORMAT_RGBA32: {
+        struct nk_color col = nk_rgba_fv(val);
+        nk_uint color = nk_color_u32(col);
+        NK_MEMCPY(attr, &color, sizeof(color));
+    } break; }
+}
+#endif
+#ifdef NK_USE_JUMPTABLES
 NK_INTERN void
 nk_draw_vertex_element(void *dst, const float *values, int value_count,
     enum nk_draw_vertex_layout_format format)
@@ -9731,6 +9829,62 @@ nk_draw_vertex_element(void *dst, const float *values, int value_count,
     nk_callback = nk_draw_vertex_element_jtable[jump_idx];
     nk_callback(dst,values,value_count);
 }
+#else
+NK_INTERN void
+nk_draw_vertex_element(void *dst, const float *values, int value_count,
+    enum nk_draw_vertex_layout_format format)
+{
+    int value_index;
+    void *attribute = dst;
+    /* if this triggers you tried to provide a color format for a value */
+    NK_ASSERT(format < NK_FORMAT_COLOR_BEGIN);
+    if (format >= NK_FORMAT_COLOR_BEGIN && format <= NK_FORMAT_COLOR_END) return;
+    for (value_index = 0; value_index < value_count; ++value_index) {
+        switch (format) {
+        default: NK_ASSERT(0 && "invalid vertex layout format"); break;
+        case NK_FORMAT_SCHAR: {
+            char value = (char)NK_CLAMP((float)NK_SCHAR_MIN, values[value_index], (float)NK_SCHAR_MAX);
+            NK_MEMCPY(attribute, &value, sizeof(value));
+            attribute = (void*)((char*)attribute + sizeof(char));
+        } break;
+        case NK_FORMAT_SSHORT: {
+            nk_short value = (nk_short)NK_CLAMP((float)NK_SSHORT_MIN, values[value_index], (float)NK_SSHORT_MAX);
+            NK_MEMCPY(attribute, &value, sizeof(value));
+            attribute = (void*)((char*)attribute + sizeof(value));
+        } break;
+        case NK_FORMAT_SINT: {
+            nk_int value = (nk_int)NK_CLAMP((float)NK_SINT_MIN, values[value_index], (float)NK_SINT_MAX);
+            NK_MEMCPY(attribute, &value, sizeof(value));
+            attribute = (void*)((char*)attribute + sizeof(nk_int));
+        } break;
+        case NK_FORMAT_UCHAR: {
+            unsigned char value = (unsigned char)NK_CLAMP((float)NK_UCHAR_MIN, values[value_index], (float)NK_UCHAR_MAX);
+            NK_MEMCPY(attribute, &value, sizeof(value));
+            attribute = (void*)((char*)attribute + sizeof(unsigned char));
+        } break;
+        case NK_FORMAT_USHORT: {
+            nk_ushort value = (nk_ushort)NK_CLAMP((float)NK_USHORT_MIN, values[value_index], (float)NK_USHORT_MAX);
+            NK_MEMCPY(attribute, &value, sizeof(value));
+            attribute = (void*)((char*)attribute + sizeof(value));
+        } break;
+        case NK_FORMAT_UINT: {
+            nk_uint value = (nk_uint)NK_CLAMP((float)NK_UINT_MIN, values[value_index], (float)NK_UINT_MAX);
+            NK_MEMCPY(attribute, &value, sizeof(value));
+            attribute = (void*)((char*)attribute + sizeof(nk_uint));
+        } break;
+        case NK_FORMAT_FLOAT:
+            NK_MEMCPY(attribute, &values[value_index], sizeof(values[value_index]));
+            attribute = (void*)((char*)attribute + sizeof(float));
+            break;
+        case NK_FORMAT_DOUBLE: {
+            double value = (double)values[value_index];
+            NK_MEMCPY(attribute, &value, sizeof(value));
+            attribute = (void*)((char*)attribute + sizeof(double));
+        } break;
+        }
+    }
+}
+#endif
 NK_INTERN void nk_draw_invalid(void*, const float*, int, enum nk_draw_vertex_layout_format) {
     NK_ASSERT(0 && "invalid format");
 }
@@ -9745,6 +9899,20 @@ void(*nk_draw_vertex_jtable[])(void*, const float*, int, enum nk_draw_vertex_lay
     nk_draw_vertex_element,
     nk_draw_invalid
 };
+#ifdef NK_USE_VERTEX_CALLBACK
+NK_INTERN void*
+nk_draw_vertex(void *dst, const struct nk_convert_config *config,
+    struct nk_vec2 pos, struct nk_vec2 uv, struct nk_colorf color)
+{
+    void *result = (void*)((char*)dst + config->vertex_size);
+    //const struct nk_draw_vertex_layout_element *elem_iter = config->vertex_layout;
+    void(*write_vertex)(void* dst, struct nk_vec2 pos, struct nk_vec2 uv, struct nk_colorf color) = config->vertex_layout;
+    write_vertex(dst, pos, uv, color);
+
+    return result;
+}
+#else 
+#ifdef NK_USE_JUMPTABLES
 NK_INTERN void*
 nk_draw_vertex(void* dst, const struct nk_convert_config* config,
     struct nk_vec2 pos, struct nk_vec2 uv, struct nk_colorf color)
@@ -9764,6 +9932,28 @@ nk_draw_vertex(void* dst, const struct nk_convert_config* config,
     }
     return result;
 }
+#else
+NK_INTERN void*
+nk_draw_vertex(void *dst, const struct nk_convert_config *config,
+    struct nk_vec2 pos, struct nk_vec2 uv, struct nk_colorf color)
+{
+    void *result = (void*)((char*)dst + config->vertex_size);
+    const struct nk_draw_vertex_layout_element *elem_iter = config->vertex_layout;
+    while (!nk_draw_vertex_layout_element_is_end_of_layout(elem_iter)) {
+        void *address = (void*)((char*)dst + elem_iter->offset);
+        switch (elem_iter->attribute) {
+        case NK_VERTEX_ATTRIBUTE_COUNT:
+        default: NK_ASSERT(0 && "wrong element attribute"); break;
+        case NK_VERTEX_POSITION: nk_draw_vertex_element(address, &pos.x, 2, elem_iter->format); break;
+        case NK_VERTEX_TEXCOORD: nk_draw_vertex_element(address, &uv.x, 2, elem_iter->format); break;
+        case NK_VERTEX_COLOR: nk_draw_vertex_color(address, &color.r, elem_iter->format); break;
+        }
+        elem_iter++;
+    }
+    return result;
+}
+#endif
+#endif
 NK_API void
 nk_draw_list_stroke_poly_line(struct nk_draw_list* list, const struct nk_vec2* points,
     const unsigned int points_count, struct nk_color color, enum nk_draw_list_stroke closed,
@@ -10557,6 +10747,148 @@ nk_draw_list_add_text(struct nk_draw_list* list, const struct nk_user_font* font
         unicode = next;
     }
 }
+#ifdef NK_USE_CONVERT_JUMPTABLES
+NK_API void nk_convert_nop(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+
+}
+NK_API void nk_convert_scissor(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_scissor* s = (const struct nk_command_scissor*)cmd;
+    nk_draw_list_add_clip(&ctx->draw_list, nk_rect(s->x, s->y, s->w, s->h));
+}
+NK_API void nk_convert_line(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_line* l = (const struct nk_command_line*)cmd;
+    nk_draw_list_stroke_line(&ctx->draw_list, nk_vec2(l->begin.x, l->begin.y),
+        nk_vec2(l->end.x, l->end.y), l->color, l->line_thickness);
+}
+NK_API void nk_convert_curve(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_curve* q = (const struct nk_command_curve*)cmd;
+    nk_draw_list_stroke_curve(&ctx->draw_list, nk_vec2(q->begin.x, q->begin.y),
+        nk_vec2(q->ctrl[0].x, q->ctrl[0].y), nk_vec2(q->ctrl[1].x,
+            q->ctrl[1].y), nk_vec2(q->end.x, q->end.y), q->color,
+        config->curve_segment_count, q->line_thickness);
+}
+NK_API void nk_convert_rect(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_rect* r = (const struct nk_command_rect*)cmd;
+    nk_draw_list_stroke_rect(&ctx->draw_list, nk_rect(r->x, r->y, r->w, r->h),
+        r->color, (float)r->rounding, r->line_thickness);
+}
+NK_API void nk_convert_rect_filled(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_rect_filled* r = (const struct nk_command_rect_filled*)cmd;
+    nk_draw_list_fill_rect(&ctx->draw_list, nk_rect(r->x, r->y, r->w, r->h),
+        r->color, (float)r->rounding);
+}
+NK_API void nk_convert_rect_multi_color(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_rect_multi_color* r = (const struct nk_command_rect_multi_color*)cmd;
+    nk_draw_list_fill_rect_multi_color(&ctx->draw_list, nk_rect(r->x, r->y, r->w, r->h),
+        r->left, r->top, r->right, r->bottom);
+}
+NK_API void nk_convert_circle(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_circle* c = (const struct nk_command_circle*)cmd;
+    nk_draw_list_stroke_circle(&ctx->draw_list, nk_vec2((float)c->x + (float)c->w / 2,
+        (float)c->y + (float)c->h / 2), (float)c->w / 2, c->color,
+        config->circle_segment_count, c->line_thickness);
+}
+NK_API void nk_convert_circle_filled(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_circle_filled* c = (const struct nk_command_circle_filled*)cmd;
+    nk_draw_list_fill_circle(&ctx->draw_list, nk_vec2((float)c->x + (float)c->w / 2,
+        (float)c->y + (float)c->h / 2), (float)c->w / 2, c->color,
+        config->circle_segment_count);
+}
+NK_API void nk_convert_arc(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_arc* c = (const struct nk_command_arc*)cmd;
+    nk_draw_list_path_line_to(&ctx->draw_list, nk_vec2(c->cx, c->cy));
+    nk_draw_list_path_arc_to(&ctx->draw_list, nk_vec2(c->cx, c->cy), c->r,
+        c->a[0], c->a[1], config->arc_segment_count);
+    nk_draw_list_path_stroke(&ctx->draw_list, c->color, NK_STROKE_CLOSED, c->line_thickness);
+}
+NK_API void nk_convert_arc_filled(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_arc_filled* c = (const struct nk_command_arc_filled*)cmd;
+    nk_draw_list_path_line_to(&ctx->draw_list, nk_vec2(c->cx, c->cy));
+    nk_draw_list_path_arc_to(&ctx->draw_list, nk_vec2(c->cx, c->cy), c->r,
+        c->a[0], c->a[1], config->arc_segment_count);
+    nk_draw_list_path_fill(&ctx->draw_list, c->color);
+}
+NK_API void nk_convert_triangle(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_triangle* t = (const struct nk_command_triangle*)cmd;
+    nk_draw_list_stroke_triangle(&ctx->draw_list, nk_vec2(t->a.x, t->a.y),
+        nk_vec2(t->b.x, t->b.y), nk_vec2(t->c.x, t->c.y), t->color,
+        t->line_thickness);
+}
+NK_API void nk_convert_triangle_filled(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_triangle_filled* t = (const struct nk_command_triangle_filled*)cmd;
+    nk_draw_list_fill_triangle(&ctx->draw_list, nk_vec2(t->a.x, t->a.y),
+        nk_vec2(t->b.x, t->b.y), nk_vec2(t->c.x, t->c.y), t->color);
+}
+NK_API void nk_convert_polygon(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    int i;
+    const struct nk_command_polygon* p = (const struct nk_command_polygon*)cmd;
+    for (i = 0; i < p->point_count; ++i) {
+        struct nk_vec2 pnt = nk_vec2((float)p->points[i].x, (float)p->points[i].y);
+        nk_draw_list_path_line_to(&ctx->draw_list, pnt);
+    }
+    nk_draw_list_path_stroke(&ctx->draw_list, p->color, NK_STROKE_CLOSED, p->line_thickness);
+}
+NK_API void nk_convert_polygon_filled(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    int i;
+    const struct nk_command_polygon_filled* p = (const struct nk_command_polygon_filled*)cmd;
+    for (i = 0; i < p->point_count; ++i) {
+        struct nk_vec2 pnt = nk_vec2((float)p->points[i].x, (float)p->points[i].y);
+        nk_draw_list_path_line_to(&ctx->draw_list, pnt);
+    }
+    nk_draw_list_path_fill(&ctx->draw_list, p->color);
+}
+NK_API void nk_convert_polyline(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    int i;
+    const struct nk_command_polyline* p = (const struct nk_command_polyline*)cmd;
+    for (i = 0; i < p->point_count; ++i) {
+        struct nk_vec2 pnt = nk_vec2((float)p->points[i].x, (float)p->points[i].y);
+        nk_draw_list_path_line_to(&ctx->draw_list, pnt);
+    }
+    nk_draw_list_path_stroke(&ctx->draw_list, p->color, NK_STROKE_OPEN, p->line_thickness);
+}
+NK_API void nk_convert_text(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_text* t = (const struct nk_command_text*)cmd;
+    nk_draw_list_add_text(&ctx->draw_list, t->font, nk_rect(t->x, t->y, t->w, t->h),
+        t->string, t->length, t->height, t->foreground);
+}
+NK_API void nk_convert_image(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_image* i = (const struct nk_command_image*)cmd;
+    nk_draw_list_add_image(&ctx->draw_list, i->img, nk_rect(i->x, i->y, i->w, i->h), i->col);
+}
+NK_API void nk_convert_custom(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_custom* c = (const struct nk_command_custom*)cmd;
+    c->callback(&ctx->draw_list, c->x, c->y, c->w, c->h, c->callback_data);
+}
+NK_API void nk_convert_polyline_float(struct nk_context* ctx, void* cmd, const struct nk_convert_config* config) {
+    const struct nk_command_polyline_float* p = (const struct nk_command_polyline_float*)cmd;
+    nk_draw_list_stroke_poly_line(&ctx->draw_list,
+        p->points, p->point_count, p->color, NK_STROKE_OPEN, p->line_thickness, (&ctx->draw_list)->config.line_AA);
+}
+void(*nk_convert_jtable[])(struct nk_context*, void*, const struct nk_convert_config*) = {
+    nk_convert_nop,/*NK_COMMAND_NOP,*/
+    nk_convert_scissor,/*NK_COMMAND_SCISSOR,*/
+    nk_convert_line,/*NK_COMMAND_LINE,*/
+    nk_convert_curve,/*NK_COMMAND_CURVE,*/
+    nk_convert_rect,/*NK_COMMAND_RECT,*/
+    nk_convert_rect_filled,/*NK_COMMAND_RECT_FILLED,*/
+    nk_convert_rect_multi_color,/*NK_COMMAND_RECT_MULTI_COLOR,*/
+    nk_convert_circle,/*NK_COMMAND_CIRCLE,*/
+    nk_convert_circle_filled,/*NK_COMMAND_CIRCLE_FILLED,*/
+    nk_convert_arc,/*NK_COMMAND_ARC,*/
+    nk_convert_arc_filled,/*NK_COMMAND_ARC_FILLED,*/
+    nk_convert_triangle,/*NK_COMMAND_TRIANGLE,*/
+    nk_convert_triangle_filled,/*NK_COMMAND_TRIANGLE_FILLED,*/
+    nk_convert_polygon,/*NK_COMMAND_POLYGON,*/
+    nk_convert_polygon_filled,/*NK_COMMAND_POLYGON_FILLED,*/
+    nk_convert_polyline,/*NK_COMMAND_POLYLINE,*/
+    nk_convert_text,/*NK_COMMAND_TEXT,*/
+    nk_convert_image,/*NK_COMMAND_IMAGE,*/
+    nk_convert_custom,/*NK_COMMAND_CUSTOM,*/
+    nk_convert_polyline_float,/*NK_COMMAND_POLYLINE_FLOAT*/
+    nk_convert_nop, /*?*/
+};
+#endif
+#ifndef NK_USE_CONVERT_JUMPTABLES
 NK_API nk_flags
 nk_convert(struct nk_context* ctx, struct nk_buffer* cmds,
     struct nk_buffer* vertices, struct nk_buffer* elements,
@@ -10704,6 +11036,41 @@ nk_convert(struct nk_context* ctx, struct nk_buffer* cmds,
     res |= (elements->needed > elements->allocated) ? NK_CONVERT_ELEMENT_BUFFER_FULL : 0;
     return res;
 }
+#else
+NK_API nk_flags
+nk_convert(struct nk_context* ctx, struct nk_buffer* cmds,
+    struct nk_buffer* vertices, struct nk_buffer* elements,
+    const struct nk_convert_config* config)
+{
+    nk_flags res = NK_CONVERT_SUCCESS;
+    const struct nk_command* cmd;
+    NK_ASSERT(ctx);
+    NK_ASSERT(cmds);
+    NK_ASSERT(vertices);
+    NK_ASSERT(elements);
+    NK_ASSERT(config);
+    NK_ASSERT(config->vertex_layout);
+    NK_ASSERT(config->vertex_size);
+    if (!ctx || !cmds || !vertices || !elements || !config || !config->vertex_layout)
+        return NK_CONVERT_INVALID_PARAM;
+
+    nk_draw_list_setup(&ctx->draw_list, config, cmds, vertices, elements,
+        config->line_AA, config->shape_AA);
+    nk_foreach(cmd, ctx)
+    {
+#ifdef NK_INCLUDE_COMMAND_USERDATA
+        ctx->draw_list.userdata = cmd->userdata;
+#endif
+
+        uint8_t jmp_idx = (uint8_t)NK_MIN(cmd->type,(NK_COMMAND_POLYLINE_FLOAT+1));
+        nk_convert_jtable[jmp_idx](ctx, (void*)cmd, config);
+    }
+    res |= (cmds->needed > cmds->allocated + (cmds->memory.size - cmds->size)) ? NK_CONVERT_COMMAND_BUFFER_FULL : 0;
+    res |= (vertices->needed > vertices->allocated) ? NK_CONVERT_VERTEX_BUFFER_FULL : 0;
+    res |= (elements->needed > elements->allocated) ? NK_CONVERT_ELEMENT_BUFFER_FULL : 0;
+    return res;
+}
+#endif
 NK_API const struct nk_draw_command*
 nk__draw_begin(const struct nk_context* ctx,
     const struct nk_buffer* buffer)
@@ -16534,7 +16901,7 @@ nk_begin_titled(struct nk_context* ctx, const char* name, const char* title,
     /* find or create window */
     style = &ctx->style;
     name_len = (int)nk_strlen(name);
-    name_hash = nk_murmur_hash(name, (int)name_len, NK_WINDOW_TITLE);
+    name_hash = NK_HASH(name, (int)name_len, NK_WINDOW_TITLE);
     win = nk_find_window(ctx, name_hash, name);
     if (!win) {
         /* create new window */
@@ -16859,7 +17226,7 @@ nk_window_is_collapsed(struct nk_context* ctx, const char* name)
     if (!ctx) return 0;
 
     title_len = (int)nk_strlen(name);
-    title_hash = nk_murmur_hash(name, (int)title_len, NK_WINDOW_TITLE);
+    title_hash = NK_HASH(name, (int)title_len, NK_WINDOW_TITLE);
     win = nk_find_window(ctx, title_hash, name);
     if (!win) return 0;
     return win->flags & NK_WINDOW_MINIMIZED;
@@ -16874,7 +17241,7 @@ nk_window_is_closed(struct nk_context* ctx, const char* name)
     if (!ctx) return 1;
 
     title_len = (int)nk_strlen(name);
-    title_hash = nk_murmur_hash(name, (int)title_len, NK_WINDOW_TITLE);
+    title_hash = NK_HASH(name, (int)title_len, NK_WINDOW_TITLE);
     win = nk_find_window(ctx, title_hash, name);
     if (!win) return 1;
     return (win->flags & NK_WINDOW_CLOSED);
@@ -16889,7 +17256,7 @@ nk_window_is_hidden(struct nk_context* ctx, const char* name)
     if (!ctx) return 1;
 
     title_len = (int)nk_strlen(name);
-    title_hash = nk_murmur_hash(name, (int)title_len, NK_WINDOW_TITLE);
+    title_hash = NK_HASH(name, (int)title_len, NK_WINDOW_TITLE);
     win = nk_find_window(ctx, title_hash, name);
     if (!win) return 1;
     return (win->flags & NK_WINDOW_HIDDEN);
@@ -16904,7 +17271,7 @@ nk_window_is_active(struct nk_context* ctx, const char* name)
     if (!ctx) return 0;
 
     title_len = (int)nk_strlen(name);
-    title_hash = nk_murmur_hash(name, (int)title_len, NK_WINDOW_TITLE);
+    title_hash = NK_HASH(name, (int)title_len, NK_WINDOW_TITLE);
     win = nk_find_window(ctx, title_hash, name);
     if (!win) return 0;
     return win == ctx->active;
@@ -16915,7 +17282,7 @@ nk_window_find(struct nk_context* ctx, const char* name)
     int title_len;
     nk_hash title_hash;
     title_len = (int)nk_strlen(name);
-    title_hash = nk_murmur_hash(name, (int)title_len, NK_WINDOW_TITLE);
+    title_hash = NK_HASH(name, (int)title_len, NK_WINDOW_TITLE);
     return nk_find_window(ctx, title_hash, name);
 }
 NK_API void
@@ -16984,7 +17351,7 @@ nk_window_collapse(struct nk_context* ctx, const char* name,
     if (!ctx) return;
 
     title_len = (int)nk_strlen(name);
-    title_hash = nk_murmur_hash(name, (int)title_len, NK_WINDOW_TITLE);
+    title_hash = NK_HASH(name, (int)title_len, NK_WINDOW_TITLE);
     win = nk_find_window(ctx, title_hash, name);
     if (!win) return;
     if (c == NK_MINIMIZED)
@@ -17009,7 +17376,7 @@ nk_window_show(struct nk_context* ctx, const char* name, enum nk_show_states s)
     if (!ctx) return;
 
     title_len = (int)nk_strlen(name);
-    title_hash = nk_murmur_hash(name, (int)title_len, NK_WINDOW_TITLE);
+    title_hash = NK_HASH(name, (int)title_len, NK_WINDOW_TITLE);
     win = nk_find_window(ctx, title_hash, name);
     if (!win) return;
     if (s == NK_HIDDEN) {
@@ -17036,7 +17403,7 @@ nk_window_set_focus(struct nk_context* ctx, const char* name)
     if (!ctx) return;
 
     title_len = (int)nk_strlen(name);
-    title_hash = nk_murmur_hash(name, (int)title_len, NK_WINDOW_TITLE);
+    title_hash = NK_HASH(name, (int)title_len, NK_WINDOW_TITLE);
     win = nk_find_window(ctx, title_hash, name);
     if (win && ctx->end != win) {
         nk_remove_window(ctx, win);
@@ -17076,7 +17443,7 @@ nk_popup_begin(struct nk_context* ctx, enum nk_popup_type type,
     NK_ASSERT(!(panel->type & NK_PANEL_SET_POPUP) && "popups are not allowed to have popups");
     (void)panel;
     title_len = (int)nk_strlen(title);
-    title_hash = nk_murmur_hash(title, (int)title_len, NK_PANEL_POPUP);
+    title_hash = NK_HASH(title, (int)title_len, NK_PANEL_POPUP);
 
     popup = win->popup.win;
     if (!popup) {
@@ -17616,7 +17983,7 @@ nk_menu_begin(struct nk_context* ctx, struct nk_window* win,
     int is_active = 0;
     struct nk_rect body;
     struct nk_window* popup;
-    nk_hash hash = nk_murmur_hash(id, (int)nk_strlen(id), NK_PANEL_MENU);
+    nk_hash hash = NK_HASH(id, (int)nk_strlen(id), NK_PANEL_MENU);
 
     NK_ASSERT(ctx);
     NK_ASSERT(ctx->current);
@@ -18730,9 +19097,9 @@ nk_tree_base(struct nk_context* ctx, enum nk_tree_type type,
     /* retrieve tree state from internal widget state tables */
     if (!hash) {
         title_len = (int)nk_strlen(title);
-        tree_hash = nk_murmur_hash(title, (int)title_len, (nk_hash)line);
+        tree_hash = NK_HASH(title, (int)title_len, (nk_hash)line);
     }
-    else tree_hash = nk_murmur_hash(hash, len, (nk_hash)line);
+    else tree_hash = NK_HASH(hash, len, (nk_hash)line);
     state = nk_find_value(win, tree_hash);
     if (!state) {
         state = nk_add_value(ctx, win, tree_hash, 0);
@@ -18919,9 +19286,9 @@ nk_tree_element_base(struct nk_context* ctx, enum nk_tree_type type,
     /* retrieve tree state from internal widget state tables */
     if (!hash) {
         title_len = (int)nk_strlen(title);
-        tree_hash = nk_murmur_hash(title, (int)title_len, (nk_hash)line);
+        tree_hash = NK_HASH(title, (int)title_len, (nk_hash)line);
     }
-    else tree_hash = nk_murmur_hash(hash, len, (nk_hash)line);
+    else tree_hash = NK_HASH(hash, len, (nk_hash)line);
     state = nk_find_value(win, tree_hash);
     if (!state) {
         state = nk_add_value(ctx, win, tree_hash, 0);
@@ -19094,7 +19461,7 @@ nk_group_begin_titled(struct nk_context* ctx, const char* id,
     /* find persistent group scrollbar value */
     win = ctx->current;
     id_len = (int)nk_strlen(id);
-    id_hash = nk_murmur_hash(id, (int)id_len, NK_PANEL_GROUP);
+    id_hash = NK_HASH(id, (int)id_len, NK_PANEL_GROUP);
     x_offset = nk_find_value(win, id_hash);
     if (!x_offset) {
         x_offset = nk_add_value(ctx, win, id_hash, 0);
@@ -19137,7 +19504,7 @@ nk_group_get_scroll(struct nk_context* ctx, const char* id, nk_uint* x_offset, n
     /* find persistent group scrollbar value */
     win = ctx->current;
     id_len = (int)nk_strlen(id);
-    id_hash = nk_murmur_hash(id, (int)id_len, NK_PANEL_GROUP);
+    id_hash = NK_HASH(id, (int)id_len, NK_PANEL_GROUP);
     x_offset_ptr = nk_find_value(win, id_hash);
     if (!x_offset_ptr) {
         x_offset_ptr = nk_add_value(ctx, win, id_hash, 0);
@@ -19173,7 +19540,7 @@ nk_group_set_scroll(struct nk_context* ctx, const char* id, nk_uint x_offset, nk
     /* find persistent group scrollbar value */
     win = ctx->current;
     id_len = (int)nk_strlen(id);
-    id_hash = nk_murmur_hash(id, (int)id_len, NK_PANEL_GROUP);
+    id_hash = NK_HASH(id, (int)id_len, NK_PANEL_GROUP);
     x_offset_ptr = nk_find_value(win, id_hash);
     if (!x_offset_ptr) {
         x_offset_ptr = nk_add_value(ctx, win, id_hash, 0);
@@ -19223,7 +19590,7 @@ nk_list_view_begin(struct nk_context* ctx, struct nk_list_view* view,
 
     /* find persistent list view scrollbar offset */
     title_len = (int)nk_strlen(title);
-    title_hash = nk_murmur_hash(title, (int)title_len, NK_PANEL_GROUP);
+    title_hash = NK_HASH(title, (int)title_len, NK_PANEL_GROUP);
     x_offset = nk_find_value(win, title_hash);
     if (!x_offset) {
         x_offset = nk_add_value(ctx, win, title_hash, 0);
@@ -24216,10 +24583,10 @@ nk_property(struct nk_context* ctx, const char* name, struct nk_property_variant
 
     /* calculate hash from name */
     if (name[0] == '#') {
-        hash = nk_murmur_hash(name, (int)nk_strlen(name), win->property.seq++);
+        hash = NK_HASH(name, (int)nk_strlen(name), win->property.seq++);
         name++; /* special number hash */
     }
-    else hash = nk_murmur_hash(name, (int)nk_strlen(name), 42);
+    else hash = NK_HASH(name, (int)nk_strlen(name), 42);
 
     /* check if property is currently hot item */
     if (win->property.active && hash == win->property.name) {

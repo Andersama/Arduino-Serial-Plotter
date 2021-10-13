@@ -2,6 +2,8 @@
 //
 #pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")
 
+#define XXH_INLINE_ALL
+#include "xxhash.h"
 #include "ArduinoSerialPlotter.h"
 #include "real_vector.h"
 
@@ -23,6 +25,12 @@ using namespace simdjson;
 #include <GLFW/glfw3.h>
 // chart plotter api allows up to 6 colors, we'll do 8
 // #define NK_CHART_MAX_SLOT 8
+/*
+#define NK_HASH XXH64
+#define NK_USE_JUMPTABLES
+//#define NK_USE_CONVERT_JUMPTABLES
+#define NK_USE_VERTEX_CALLBACK
+#define NK_USE_NONOWNING_API
 #define NK_PRIVATE true
 #define NK_SINGLE_FILE true
 #define NK_API
@@ -42,6 +50,10 @@ using namespace simdjson;
 #include "nuklear_glfw_gl4.h"
 
 NK_API void nk_noop() {}
+*/
+#include "imgui/imgui.h"
+#include "imgui/backends/imgui_impl_glfw.h"
+#include "imgui/backends/imgui_impl_opengl3.h"
 // x,y -> 4 per float, 8 per x,y ergo
 #define MAX_VERTEX_BUFFER 512 * 1024
 #define MAX_ELEMENT_BUFFER (MAX_VERTEX_BUFFER / 4)
@@ -405,37 +417,6 @@ size_t get_lsb_set(unsigned int v) noexcept {
     return r;
 }
 
-void nk_plot_multi(struct nk_context *ctx, enum nk_chart_type type, const float **values, int count, int offset,
-                   int slots) {
-    int i = 0;
-    int j = 0;
-    float min_value;
-    float max_value;
-
-    NK_ASSERT(ctx);
-    NK_ASSERT(values);
-    if (!ctx || !values || !count || !slots)
-        return;
-
-    min_value = values[0][offset];
-    max_value = values[0][offset];
-    for (j = 0; j < slots; ++j) {
-        for (i = 0; i < count; ++i) {
-            min_value = NK_MIN(values[j][i + offset], min_value);
-            max_value = NK_MAX(values[j][i + offset], max_value);
-        }
-    }
-
-    if (nk_chart_begin(ctx, type, count, min_value, max_value)) {
-        for (j = 0; j < slots; ++j) {
-            for (i = 0; i < count; ++i) {
-                nk_chart_push_slot(ctx, values[j][i + offset], j);
-            }
-        }
-        nk_chart_end(ctx);
-    }
-}
-
 nk_flags nk_chart_draw_yticks(struct nk_context *ctx, struct nk_window *win, struct nk_chart *g, float yoffset,
                               float xoffset, float spacing, nk_flags alignment) {
     struct nk_panel *layout = win->layout;
@@ -772,7 +753,7 @@ size_t handle_json(ondemand::parser &parser, struct nk_context *ctx, real::vecto
                     // get the view of the json object
                     // this effectively validates that we have a complete json object (no errors) in our buffer
                     // seems like additional effort
-                    
+
                     auto error = simdjson::to_json_string(graph_data).get(v);
                     if (error == simdjson::INCOMPLETE_ARRAY_OR_OBJECT) {
                         // wait for object to complete in a another call
@@ -782,7 +763,7 @@ size_t handle_json(ondemand::parser &parser, struct nk_context *ctx, real::vecto
                         stream_buffer.erase(stream_buffer.begin());
                         return graphs_to_display;
                     }
-                    
+
                     // now we extract the data we need
                     /*
                     ondemand::object obj;
@@ -798,7 +779,7 @@ size_t handle_json(ondemand::parser &parser, struct nk_context *ctx, real::vecto
                         v = {stream_buffer.data()+dist, 1}; //stream_buffer.capacity()-dist
                     }
                     */
-                    
+
                     /*
                     ondemand::json_type t;
                     auto error = graph_data.type().get(t);
@@ -1131,6 +1112,10 @@ int main(int argc, char *argv[]) {
 
     int fps_delay = 16;
 
+    smooth_data<float> fps_data;
+    fps_data.lerp_v = 0.001;
+    fps_data.value = 60.0f;
+
     const size_t bytes_per_second = baud_rate / 8;
     const size_t full_buffer = (mx_width - (2 * SIMDJSON_PADDING));
     const size_t ns_per_second = 1'000'000'000;
@@ -1210,16 +1195,15 @@ int main(int argc, char *argv[]) {
 
                 if (nk_tree_push_hashed(ctx, NK_TREE_TAB, "Gui", nk_collapse_states::NK_MINIMIZED, "_", 1, __LINE__)) {
                     nk_layout_row_dynamic(ctx, 30, 2);
-                    
+
                     nk_label(ctx, "Marks (x-axis)", NK_TEXT_ALIGN_LEFT);
                     nk_slider_int(ctx, 2, &xticks, 20, 1);
                     nk_label(ctx, "Marks (y-axis)", NK_TEXT_ALIGN_LEFT);
                     nk_slider_int(ctx, 2, &yticks, 20, 1);
-                    
-                    
-                    //nk_property_int(ctx, "Marks (x-axis)", 1, &xticks, 10, 1, 0.1f);
-                    //nk_property_int(ctx, "Marks (y-axis)", 1, &yticks, 10, 1, 0.1f);
-                    
+
+                    // nk_property_int(ctx, "Marks (x-axis)", 1, &xticks, 10, 1, 0.1f);
+                    // nk_property_int(ctx, "Marks (y-axis)", 1, &yticks, 10, 1, 0.1f);
+
                     nk_property_int(ctx, "Width", 100, &graph_width, 0xffff, 1, 1.0f);
                     nk_property_int(ctx, "Height", 100, &graph_height, 0xffff, 1, 1.0f);
                     // nk_label(ctx, "Zoom: ", NK_TEXT_LEFT);
@@ -1228,22 +1212,22 @@ int main(int argc, char *argv[]) {
                     nk_property_float(ctx, "Rate", 0.0, &zoom_rate, 1.0, 0.0001f, 0.0001f);
 
                     nk_property_float(ctx, "Line Width", 1.0f, &line_width, 50.0f, 0.5f, 0.5f);
-                    //pretend we have an extra widget to fill the space
+                    // pretend we have an extra widget to fill the space
                     struct nk_rect b;
                     nk_widget(&b, ctx);
                     nk_layout_row_dynamic(ctx, 30, 1);
-                    //nk_widget(ctx);
+                    // nk_widget(ctx);
                     nk_checkbox_label(ctx, "Demo", &demo_mode);
                     nk_checkbox_label(ctx, "Random/Json", &example_json_mode);
                     nk_checkbox_label(ctx, "Anti-Aliasing", &antialiasing);
 
                     nk_checkbox_label(ctx, "VSync", &vsync);
-                    //nk_checkbox_label(ctx, "FPS Cap", &fps_cap);
-                    //nk_property_int(ctx, "FPS Limit", 24, &fps_limit, 200, 1, 1.0f);
-                    //fps_delay = fps_cap ? (1000 / fps_limit) : (1000 / 2000);
+                    // nk_checkbox_label(ctx, "FPS Cap", &fps_cap);
+                    // nk_property_int(ctx, "FPS Limit", 24, &fps_limit, 200, 1, 1.0f);
+                    // fps_delay = fps_cap ? (1000 / fps_limit) : (1000 / 2000);
                     /* Update VSync */
                     glfwSwapInterval(vsync);
-                    
+
                     nk_tree_pop(ctx);
                 }
 
@@ -1326,8 +1310,10 @@ int main(int argc, char *argv[]) {
                 nk_label(ctx, delay_text2, NK_TEXT_LEFT);
 
                 float fps = 1.0f / ((double)timestamp_diff / (double)ns_per_second);
+                float fps_smoothed = fps_data.get_next_smooth(fps);
+
                 char fps_text[64] = "fps: ";
-                chrs = std::to_chars(fps_text + 5, fps_text + 64, fps, std::chars_format::general, 3);
+                chrs = std::to_chars(fps_text + 5, fps_text + 64, fps_smoothed, std::chars_format::general, 3);
                 *chrs.ptr = 0;
                 nk_label(ctx, fps_text, NK_TEXT_LEFT);
 
@@ -1586,9 +1572,13 @@ int main(int argc, char *argv[]) {
 
                                 point_idx += 2;
                             }
+#ifndef NK_USE_NONOWNING_API
+                            nk_stroke_polyline(&ctx->current->buffer, line_data, graphs[i].values[s].size(), line_width,
+                                               graphs[i].colors[s]);
+#else
                             nk_stroke_polyline_float(&ctx->current->buffer, line_data, graphs[i].values[s].size(),
-                                                     line_width, graphs[i].colors[s]);
-
+                                line_width, graphs[i].colors[s]);
+#endif
                             // struct nk_handle h;
                             // h.ptr = &graphs[i].lin
                             // nk_push_custom(&ctx->current->buffer, graph_bounds, render_polyline, );
@@ -1747,8 +1737,8 @@ int main(int argc, char *argv[]) {
         nk_end(ctx);
 
         /* Draw */
-        glfwGetWindowSize(win, &width, &height);
-        glViewport(0, 0, width, height);
+        // glfwGetWindowSize(win, &width, &height);
+        // glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(bg.r, bg.g, bg.b, bg.a);
         /* IMPORTANT: `nk_glfw_render` modifies some global OpenGL state
