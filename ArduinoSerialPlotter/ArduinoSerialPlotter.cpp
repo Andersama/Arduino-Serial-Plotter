@@ -735,13 +735,13 @@ int main(int argc, char *argv[]) {
     Serial SerialPort{};
 
     auto SerialPorts = SerialPort.ListAvailable();
+    int port_num = 0;
+    int baud_rate = 115200;
     // go to fill in first available port
     for (size_t i = 0; i < SerialPorts.size(); i++) {
         if (SerialPorts[i]) {
-            size_t port_num = get_lsb_set(SerialPorts[i]);
-            auto result = std::to_chars(txtedit, (txtedit + txtedit_sz), port_num);
-            *result.ptr = 0;
-            txtedit_len[0] = result.ptr - txtedit;
+            size_t port_numbit = get_lsb_set(SerialPorts[i]);
+            port_num = port_numbit;
             break;
         }
     }
@@ -758,6 +758,9 @@ int main(int argc, char *argv[]) {
     smooth_data<double> smooth_fps;
     smooth_fps.lerp_v = 0.0001;
     smooth_fps.value = 60.0;
+
+    size_t serial_timestamp = 0;
+    size_t serial_delay = 1'000'000'000;
     while (!glfwWindowShouldClose(win)) {
         /* Input */
         glfwPollEvents();
@@ -779,16 +782,69 @@ int main(int argc, char *argv[]) {
         //ImGui::ShowDemoWindow();
 
         {
-            ImGui::Begin("Hello World");
-            
-            ImGui::Checkbox("Demo", &demo_mode);
-            //bool nvsync = vsync;
-            ImGui::Checkbox("VSync", &vsync);
-            glfwSwapInterval(vsync);
-            //ImGui::LabelText("FPS")
-            ImGui::LabelText("FPS", "%.2f", fps_smoothed);
+            //ImGui::GetWindowHeight()
+            int window_w;
+            int window_h;
+            glfwGetWindowSize(win, &window_w, &window_h);
+            ImGui::SetNextWindowPos(ImVec2{0.0f,0.0f}, ImGuiCond_::ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2{(float)window_w,(float)window_h}, ImGuiCond_::ImGuiCond_Always);
+            ImGui::Begin("Graphs", nullptr, ImGuiWindowFlags_::ImGuiWindowFlags_NoResize | ImGuiWindowFlags_::ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_::ImGuiWindowFlags_NoTitleBar);
+            {
+                if(ImGui::CollapsingHeader("Options", ImGuiTreeNodeFlags_::ImGuiTreeNodeFlags_DefaultOpen)) {
+                    if (ImGui::BeginTable("split", 3))
+                    {
+                        ImGui::TableNextColumn();
+                        ImGui::InputInt("Port", &port_num);
+                        ImGui::TableNextColumn();
+                        ImGui::InputInt("Baud", &baud_rate);
+                        ImGui::TableNextColumn();
 
-            if (demo_mode) {
+                        if (SerialPort.IsConnected()) {
+                            if (demo_mode) {
+                                clear_data(graphs);
+                                graphs_to_display = 0;
+                            }
+                            demo_mode = false;
+                            if (ImGui::Button("Disconnect")) {
+                                SerialPort.Disconnect();
+                            }
+                        } else {
+                            if (ImGui::Button("Connect")) {
+                                int result = SerialPort.Connect(port_num, false, baud_rate);
+                                if (result) {
+                                    size_t bytes_per_second = baud_rate / 8;
+                                    size_t full_buffer = (mx_width - (2 * SIMDJSON_PADDING));
+                                    constexpr size_t ns_per_s = 1'000'000'000;
+                                    constexpr size_t ns_per_ms = 1'000'000;
+
+                                    serial_delay = ((full_buffer * ns_per_s) / bytes_per_second + (2 * ns_per_ms)) / 2;
+                                }
+                            }
+                        }
+                        ImGui::EndTable();
+                    }
+                    if(ImGui::CollapsingHeader("Gui")) {
+                        ImGui::Checkbox("Demo", &demo_mode);
+                        ImGui::Checkbox("VSync", &vsync);
+                        glfwSwapInterval(vsync);
+                        ImGui::LabelText("FPS", "%.2f", fps_smoothed);
+                    }
+                }
+                //ImGui::ShowDemoWindow();
+            }
+
+            size_t serial_diff = current_timestamp - serial_timestamp;
+            if (SerialPort.IsConnected() && (serial_diff > serial_delay)) {
+                /* Serial Stuff */
+                serial_timestamp = current_timestamp;
+                int read_count = SerialPort.ReadData(ptr, (mx_width - (2 * SIMDJSON_PADDING)));
+                ptr[read_count] = 0;
+
+                if (read_count > 0) { // -1 is failure so check > 0
+                    size_t g = handle_json(parser, graphs, ptr, read_count);
+                    graphs_to_display = (g > 0 && g != graphs_to_display) ? g : graphs_to_display;
+                }
+            } else if (demo_mode) {
                 /* Randomly Generated Data */
                 previous_timestamp = current_timestamp;
                 graphs_to_display = 6;
@@ -863,11 +919,13 @@ int main(int argc, char *argv[]) {
             }
 
             for (size_t i = 0; i < graphs.size() && i < graphs_to_display; i++) {
+                size_t slot_count = std::min(graphs[i].values.size(), graphs[i].slots);
+                
                 double xmin = std::numeric_limits<double>::max();
                 double xmax = std::numeric_limits<double>::min();
                 double ymin = std::numeric_limits<double>::max();
                 double ymax = std::numeric_limits<double>::min();
-                size_t slot_count = std::min(graphs[i].values.size(), graphs[i].slots);
+
                 for (size_t s = 0; s < slot_count; s++) {
                     for (size_t idx = 0; idx < graphs[i].values[s].size(); idx++) {
                         xmin = std::min(xmin, (double)graphs[i].values[s][idx].x);
@@ -877,11 +935,13 @@ int main(int argc, char *argv[]) {
                     }
                 }
                 //make sure the gui tracks the points
+                double yrange = ymax - ymin;
+                double yspacing = yrange * 0.07;
                 
-                ImPlot::SetNextPlotLimits(xmin,xmax,ymin,ymax,ImGuiCond_Always);
+                ImPlot::SetNextPlotLimits(xmin,xmax,ymin-yspacing,ymax+yspacing,ImGuiCond_Always);
+                //ImPlot::FitNextPlotAxes(true,false,false,false);
                 if (ImPlot::BeginPlot(graphs[i].title.c_str(), "Time")) {
                     for (size_t s = 0; s < slot_count; s++) {
-                        //ImPlot::PlotLine(graphs[i].labels[s].c_str(),)
                         ImPlot::PlotLineG(graphs[i].labels[s].c_str(), [](void* data, int idx){
                             float *ptr = (float*)data;
                             return ImPlotPoint(ptr[idx*2], ptr[idx*2+1]);
@@ -897,6 +957,7 @@ int main(int argc, char *argv[]) {
         ImGui::Render();
         int display_w, display_h;
         glfwGetFramebufferSize(win, &display_w, &display_h);
+        //glfwGetWindowSize(win, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
         glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w,
                      clear_color.w);

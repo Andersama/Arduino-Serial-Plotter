@@ -912,10 +912,11 @@ IMPLOT_INLINE void RenderMarkers(Getter getter, Transformer transformer, ImDrawL
     };
     ImPlotContext& gp = *GImPlot;
     const ImRect& rect = gp.CurrentPlot->PlotRect;
+    void (*marker_callback)(ImDrawList&, const ImVec2&, float s, bool, ImU32, bool, ImU32, float) = marker_table[marker];
     for (int i = 0; i < getter.Count; ++i) {
         ImVec2 c = transformer(getter(i));
         if (c.x >= rect.Min.x && c.y >= rect.Min.y && c.x <= rect.Max.x && c.y <= rect.Max.y)
-            marker_table[marker](DrawList, c, size, rend_mk_line, col_mk_line, rend_mk_fill, col_mk_fill, weight);
+            marker_callback(DrawList, c, size, rend_mk_line, col_mk_line, rend_mk_fill, col_mk_fill, weight);
     }
 }
 
