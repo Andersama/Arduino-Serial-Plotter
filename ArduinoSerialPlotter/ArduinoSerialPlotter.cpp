@@ -2,10 +2,8 @@
 //
 #pragma comment(linker, "/SUBSYSTEM:windows /ENTRY:mainCRTStartup")
 
-#define XXH_INLINE_ALL
 #include "ArduinoSerialPlotter.h"
 #include "real_vector.h"
-#include "xxhash.h"
 
 #include "SerialClass.h" // Library described above
 #include <charconv>
@@ -29,15 +27,7 @@ using namespace simdjson;
 #include "imgui/backends/imgui_impl_glfw.h"
 #include "imgui/backends/imgui_impl_opengl3.h"
 #include "imgui/imgui.h"
-
 #include "imgui/implot.h"
-// x,y -> 4 per float, 8 per x,y ergo
-#define MAX_VERTEX_BUFFER 512 * 1024
-#define MAX_ELEMENT_BUFFER (MAX_VERTEX_BUFFER / 4)
-//#define MAX_VERTEX_BUFFER 4096 * 1024
-//#define MAX_ELEMENT_BUFFER 1024 * 1024
-//#define MAX_VERTEX_BUFFER 512 * 1024
-//#define MAX_ELEMENT_BUFFER 128 * 1024
 
 #ifdef min
 #undef min
@@ -107,257 +97,6 @@ template <typename T> struct smooth_data {
             return value = std::lerp(value, v, lerp_v);
     }
 };
-
-std::string example_json = R"raw({"t": 5649,
-  "ng": 5,
-  "lu": 4086,
-  "g": [
-        {
-          "t": "Temps",
-          "xvy": 0,
-          "pd": 60,
-          "sz": 3,
-          "l": [
-                "Low Temp",
-                "High Temp",
-                "Smooth Avg"
-          ],
-          "c": [
-                "green",
-                "orange",
-                "cyan"
-          ],
-          "d": [
-                80.48750305,
-                80.82499694,
-                80.65625
-          ]
-        },
-        {
-          "t": "Pump Status",
-          "xvy": 0,
-          "pd": 60,
-          "sz": 3,
-          "l": [
-                "Pump",
-                "Thermal",
-                "Light"
-          ],
-          "c": [
-                "green",
-                "orange",
-                "cyan"
-          ],
-          "d": [
-                0,
-                0,
-                0
-          ]
-        },
-        {
-          "t": "Lux",
-          "xvy": 0,
-          "pd": 60,
-          "sz": 4,
-          "l": [
-                "Value",
-                "Smooth",
-                "Low",
-                "High"
-          ],
-          "c": [
-                "green",
-                "orange",
-                "cyan",
-                "yellow"
-          ],
-          "d": [
-                2274.62939453,
-                2277.45947265,
-                4050,
-                4500
-          ]
-        },
-        {
-          "t": "Temp Diff",
-          "xvy": 0,
-          "pd": 60,
-          "sz": 4,
-          "l": [
-                "dFarenheit",
-                "sum",
-                "Low",
-                "High"
-          ],
-          "c": [
-                "green",
-                "orange",
-                "cyan",
-                "yellow"
-          ],
-          "d": [
-                0,
-                0,
-                0.5,
-                10
-          ]
-        },
-        {
-          "t": "Power",
-          "xvy": 0,
-          "pd": 60,
-          "sz": 3,
-          "l": [
-                "watts (est. ligth)",
-                "watts (1.9~gpm)",
-                "watts (1gpm)"
-          ],
-          "c": [
-                "green",
-                "orange",
-                "cyan"
-          ],
-          "d": [
-                181.78063964,
-                114.88922882,
-                59.35943603
-          ]
-        }
-  ]
-}                            
-                              
-                               
-0123456789
-0123456789
-0123456789
-0123456789
-
-0123456789
-0123456789
-0123456789
-0123456789
-                  )raw";
-
-std::string mangled_example_json = R"raw(        {
-          "t": "Temp Diff",
-          "xvy": 0,
-          "pd": 60,
-          "sz": 4,
-          "l": [
-                "dFarenheit",
-                "sum",
-                "Low",
-                "High"
-          ],
-          "c": [
-                "green",
-                "orange",
-                "cyan",
-                "yellow"
-          ],
-          "d": [
-                0,
-                0,
-                0.5,
-                10
-          ]
-        },
-        {
-          "t": "Power",
-          "xvy": 0,
-          "pd": 60,
-          "sz": 3,
-          "l": [
-                "watts (est. ligth)",
-                "watts (1.9~gpm)",
-                "watts (1gpm)"
-          ],
-          "c": [
-                "green",
-                "orange",
-                "cyan"
-          ],
-          "d": [
-                181.78063964,
-                114.88922882,
-                59.35943603
-          ]
-        }
-  ]
-}   !@#$%^&*()`;'?><.0123456789some_errant_data   {"t": 5649,
-  "ng": 5,
-  "lu": 4086,
-  "g": [
-        {
-          "t": "Temps",
-          "xvy": 0,
-          "pd": 60,
-          "sz": 3,
-          "l": [
-                "Low Temp",
-                "High Temp",
-                "Smooth Avg"
-          ],
-          "c": [
-                "green",
-                "orange",
-                "cyan"
-          ],
-          "d": [
-                80.48750305,
-                80.82499694,
-                80.65625
-          ]
-        },
-        {
-          "t": "Pump Status",
-          "xvy": 0,
-          "pd": 60,
-          "sz": 3,
-          "l": [
-                "Pump",
-                "Thermal",
-                "Light"
-          ],
-          "c": [
-                "green",
-                "orange",
-                "cyan"
-          ],
-          "d": [
-                0,
-                0,
-                0
-          ]
-        },
-        {
-          "t": "Lux",
-          "xvy": 0,
-          "pd": 60,
-          "sz": 4,
-          "l": [
-                "Value",
-                "Smooth",
-                "Low",
-                "High"
-          ],
-          "c": [
-                "green",
-                "orange",
-                "cyan",
-                "yellow"
-          ],
-          "d": [
-                2274.62939453,
-                2277.45947265,
-                4050,
-                4500
-          ]
-        },
-                      
-                              
-                               
-                  )raw";
 
 static void error_callback(int e, const char *d) { printf("Error %d: %s\n", e, d); }
 
@@ -748,8 +487,8 @@ int main(int argc, char *argv[]) {
     bool vsync = true;
     /* Turn on VSYNC */
     glfwSwapInterval(vsync);
-    size_t previous_timestamp = 0;
-    //int demo_mode = 1;
+    size_t previous_timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    // int demo_mode = 1;
     bool demo_mode = true;
     int graphs_to_display = 0;
 
@@ -761,6 +500,10 @@ int main(int argc, char *argv[]) {
 
     size_t serial_timestamp = 0;
     size_t serial_delay = 1'000'000'000;
+
+    std::string comport_path;
+    comport_path.reserve(128);
+
     while (!glfwWindowShouldClose(win)) {
         /* Input */
         glfwPollEvents();
@@ -775,24 +518,27 @@ int main(int argc, char *argv[]) {
         size_t current_timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
         size_t timestamp_diff = current_timestamp - previous_timestamp;
         previous_timestamp = current_timestamp;
-        
+
         constexpr double ns_per_second = 1'000'000'000.0;
-        double fps = 1.0 / ((double)timestamp_diff / (double)ns_per_second);
+        double inverse = ((double)timestamp_diff / (double)ns_per_second);
+        double fps = 1.0 / inverse;
+        smooth_fps.lerp_v = 0.1 * inverse;
         double fps_smoothed = smooth_fps.get_next_smooth(fps);
-        //ImGui::ShowDemoWindow();
+        // ImGui::ShowDemoWindow();
 
         {
-            //ImGui::GetWindowHeight()
+            // ImGui::GetWindowHeight()
             int window_w;
             int window_h;
             glfwGetWindowSize(win, &window_w, &window_h);
-            ImGui::SetNextWindowPos(ImVec2{0.0f,0.0f}, ImGuiCond_::ImGuiCond_Always);
-            ImGui::SetNextWindowSize(ImVec2{(float)window_w,(float)window_h}, ImGuiCond_::ImGuiCond_Always);
-            ImGui::Begin("Graphs", nullptr, ImGuiWindowFlags_::ImGuiWindowFlags_NoResize | ImGuiWindowFlags_::ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_::ImGuiWindowFlags_NoTitleBar);
+            ImGui::SetNextWindowPos(ImVec2{0.0f, 0.0f}, ImGuiCond_::ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2{(float)window_w, (float)window_h}, ImGuiCond_::ImGuiCond_Always);
+            ImGui::Begin("Graphs", nullptr,
+                         ImGuiWindowFlags_::ImGuiWindowFlags_NoResize | ImGuiWindowFlags_::ImGuiWindowFlags_NoCollapse |
+                             ImGuiWindowFlags_::ImGuiWindowFlags_NoTitleBar);
             {
-                if(ImGui::CollapsingHeader("Options", ImGuiTreeNodeFlags_::ImGuiTreeNodeFlags_DefaultOpen)) {
-                    if (ImGui::BeginTable("split", 3))
-                    {
+                if (ImGui::CollapsingHeader("Options", ImGuiTreeNodeFlags_::ImGuiTreeNodeFlags_DefaultOpen)) {
+                    if (ImGui::BeginTable("split", 3)) {
                         ImGui::TableNextColumn();
                         ImGui::InputInt("Port", &port_num);
                         ImGui::TableNextColumn();
@@ -810,7 +556,13 @@ int main(int argc, char *argv[]) {
                             }
                         } else {
                             if (ImGui::Button("Connect")) {
+                                comport_path.clear();
+                                fmt::format_to(std::back_inserter(comport_path), std::string_view{"\\\\.\\COM{}"},
+                                               port_num);
+
                                 int result = SerialPort.Connect(port_num, false, baud_rate);
+                                if (result == 0)
+                                    result = SerialPort.Connect(comport_path.data(), false, baud_rate);
                                 if (result) {
                                     size_t bytes_per_second = baud_rate / 8;
                                     size_t full_buffer = (mx_width - (2 * SIMDJSON_PADDING));
@@ -823,7 +575,7 @@ int main(int argc, char *argv[]) {
                         }
                         ImGui::EndTable();
                     }
-                    if(ImGui::CollapsingHeader("Gui")) {
+                    if (ImGui::CollapsingHeader("Gui")) {
                         ImGui::Checkbox("Demo", &demo_mode);
                         ImGui::Checkbox("VSync", &vsync);
                         glfwSwapInterval(vsync);
@@ -831,6 +583,7 @@ int main(int argc, char *argv[]) {
                     }
                 }
                 //ImGui::ShowDemoWindow();
+                
             }
 
             size_t serial_diff = current_timestamp - serial_timestamp;
@@ -896,9 +649,9 @@ int main(int argc, char *argv[]) {
                                 graphs[i].values[s].emplace_back(0.0f, 0.0f);
                             else
                                 graphs[i].values[s].emplace_back(graphs[i].values[s].back().x + 0.001f,
-                                    graphs[i].values[s].back().y +
-                                    ((pcg32_random_r(&rng) % 256) / 1024.0f) -
-                                    (128 / 1024.0f));
+                                                                 graphs[i].values[s].back().y +
+                                                                     ((pcg32_random_r(&rng) % 256) / 1024.0f) -
+                                                                     (128 / 1024.0f));
 #endif
                         }
                     }
@@ -920,7 +673,7 @@ int main(int argc, char *argv[]) {
 
             for (size_t i = 0; i < graphs.size() && i < graphs_to_display; i++) {
                 size_t slot_count = std::min(graphs[i].values.size(), graphs[i].slots);
-                
+
                 double xmin = std::numeric_limits<double>::max();
                 double xmax = std::numeric_limits<double>::min();
                 double ymin = std::numeric_limits<double>::max();
@@ -934,18 +687,22 @@ int main(int argc, char *argv[]) {
                         ymax = std::max(ymax, (double)graphs[i].values[s][idx].y);
                     }
                 }
-                //make sure the gui tracks the points
+                // make sure the gui tracks the points
                 double yrange = ymax - ymin;
                 double yspacing = yrange * 0.07;
-                
-                ImPlot::SetNextPlotLimits(xmin,xmax,ymin-yspacing,ymax+yspacing,ImGuiCond_Always);
-                //ImPlot::FitNextPlotAxes(true,false,false,false);
+
+                //ImPlot::SetNextPlotLimits(xmin, xmax, ymin - yspacing, ymax + yspacing, ImGuiCond_Always);
+                ImPlot::FitNextPlotAxes(true,false,false,false);
                 if (ImPlot::BeginPlot(graphs[i].title.c_str(), "Time")) {
                     for (size_t s = 0; s < slot_count; s++) {
-                        ImPlot::PlotLineG(graphs[i].labels[s].c_str(), [](void* data, int idx){
-                            float *ptr = (float*)data;
-                            return ImPlotPoint(ptr[idx*2], ptr[idx*2+1]);
-                        }, graphs[i].values[s].data(),graphs[i].values[s].size());
+                        
+                        ImPlot::PlotLineG(
+                            graphs[i].labels[s].c_str(),
+                            [](void *data, int idx) {
+                                float *ptr = (float *)data;
+                                return ImPlotPoint(ptr[idx * 2], ptr[idx * 2 + 1]);
+                            },
+                            graphs[i].values[s].data(), graphs[i].values[s].size());
                     }
                     ImPlot::EndPlot();
                 }
@@ -957,7 +714,7 @@ int main(int argc, char *argv[]) {
         ImGui::Render();
         int display_w, display_h;
         glfwGetFramebufferSize(win, &display_w, &display_h);
-        //glfwGetWindowSize(win, &display_w, &display_h);
+        // glfwGetWindowSize(win, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
         glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w,
                      clear_color.w);

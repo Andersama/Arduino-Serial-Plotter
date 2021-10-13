@@ -1,9 +1,10 @@
 # Arduino-Serial-Plotter
-Nuklear driven graph monitor for use in combination with https://github.com/devinaconley/arduino-plotter
+ImGui driven graph monitor for use in combination with https://github.com/devinaconley/arduino-plotter
 
 <!--![example](https://user-images.githubusercontent.com/25020235/135802654-96345113-1916-4d33-92b9-1e4b1cf7f931.png)-->
 <!--![TjwGi7kLoC](https://user-images.githubusercontent.com/25020235/136124350-dfc99226-8b70-46f6-a251-1ff3db09ea32.gif)-->
-![gui in demo mode](https://user-images.githubusercontent.com/25020235/136124484-5220ac64-de19-4d21-800d-ee8ad84a8265.gif)
+<!--![gui in demo mode](https://user-images.githubusercontent.com/25020235/136124484-5220ac64-de19-4d21-800d-ee8ad84a8265.gif)-->
+![gui in demo mode](https://user-images.githubusercontent.com/25020235/137197483-b983d35d-d65c-4d85-b2d0-83ed4cdb51f4.gif)
 
 # Compiling
 Quick and easy install vcpkg and integrate it with msvc then run (if msvc doesn't pick up on the required libs anyway)
