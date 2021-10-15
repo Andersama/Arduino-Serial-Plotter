@@ -165,7 +165,6 @@ size_t handle_json(ondemand::parser &parser, real::vector<graph_t> &graphs, cons
             auto error = parser.iterate(json).get(graph_data);
             size_t g = 0;
             if (!error) {
-#if 1
                 // bool result = true;
                 std::string_view v;
                 try {
@@ -355,7 +354,6 @@ size_t handle_json(ondemand::parser &parser, real::vector<graph_t> &graphs, cons
                     return graphs_to_display;
                 }
                 graphs_to_display = g > 0 ? g : graphs_to_display;
-#endif
             } else {
                 stream_buffer.erase(size_t{0}, dist ? dist : size_t{1});
                 // stream_buffer.erase(stream_buffer.begin());
@@ -485,6 +483,7 @@ int main(int argc, char *argv[]) {
         }
     }
     bool vsync = true;
+    bool dtr_reset = false;
     /* Turn on VSYNC */
     glfwSwapInterval(vsync);
     size_t previous_timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -538,11 +537,13 @@ int main(int argc, char *argv[]) {
                              ImGuiWindowFlags_::ImGuiWindowFlags_NoTitleBar);
             {
                 if (ImGui::CollapsingHeader("Options", ImGuiTreeNodeFlags_::ImGuiTreeNodeFlags_DefaultOpen)) {
-                    if (ImGui::BeginTable("split", 3)) {
+                    if (ImGui::BeginTable("split", 4)) {
                         ImGui::TableNextColumn();
                         ImGui::InputInt("Port", &port_num);
                         ImGui::TableNextColumn();
                         ImGui::InputInt("Baud", &baud_rate);
+                        ImGui::TableNextColumn();
+                        ImGui::Checkbox("DTR", &dtr_reset);
                         ImGui::TableNextColumn();
 
                         if (SerialPort.IsConnected()) {
@@ -560,9 +561,9 @@ int main(int argc, char *argv[]) {
                                 fmt::format_to(std::back_inserter(comport_path), std::string_view{"\\\\.\\COM{}"},
                                                port_num);
 
-                                int result = SerialPort.Connect(port_num, false, baud_rate);
+                                int result = SerialPort.Connect(port_num, dtr_reset, baud_rate);
                                 if (result == 0)
-                                    result = SerialPort.Connect(comport_path.data(), false, baud_rate);
+                                    result = SerialPort.Connect(comport_path.data(), dtr_reset, baud_rate);
                                 if (result) {
                                     size_t bytes_per_second = baud_rate / 8;
                                     size_t full_buffer = (mx_width - (2 * SIMDJSON_PADDING));
